@@ -42,6 +42,23 @@ const interviewSchema = new mongoose.Schema(
 
     endTime: Date,
 
+     // ai control
+
+    currentRound: {
+      type: Number,
+      default: 0,
+    },
+
+    maxRounds: {
+      type: Number,
+      default: 10,
+    },
+
+    currentQuestion: {
+      type: String,
+      default: "",
+    },
+
     overallScore: {
       type: Number,
       default: 0,
