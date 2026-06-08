@@ -8,6 +8,23 @@ const interviewSchema = new mongoose.Schema(
       required: true,
     },
 
+    type: {
+      type: String,
+      enum: ["template", "instance"],
+      default: "instance",
+    },
+      
+    isPublic: {
+      type: Boolean,
+      default: false,
+    },
+
+     templateId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Interview",
+      default: null,
+    },
+
     role: {
       type: String,
       required: true,
@@ -30,11 +47,7 @@ const interviewSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: [
-        "scheduled",
-        "in-progress",
-        "completed",
-      ],
+      enum: ["scheduled", "in-progress", "completed"],
       default: "scheduled",
     },
 
@@ -42,8 +55,7 @@ const interviewSchema = new mongoose.Schema(
 
     endTime: Date,
 
-     // ai control
-
+    // ai control
     currentRound: {
       type: Number,
       default: 0,
@@ -78,19 +90,24 @@ const interviewSchema = new mongoose.Schema(
 
         answer: String,
 
-        technicalScore: Number,
+        evaluation: {
+          technicalScore: Number,
+          communicationScore: Number,
+          correctnessScore: Number,
+          overallScore: Number,
+          feedback: String,
+        },
 
-        communicationScore: Number,
-
-        correctnessScore: Number,
-
-        feedback: String,
+        askedAt: {
+          type: Date,
+          default: Date.now,
+        },
       },
     ],
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const Interview = mongoose.model("Interview", interviewSchema);
