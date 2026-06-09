@@ -4,11 +4,11 @@ import { Eye, EyeOff, Mic, Loader2, AlertCircle } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import api from "../api/axios";
 
-export default function SignUp() {
+export default function SignIn() {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
 
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -20,22 +20,18 @@ export default function SignUp() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
-      setError("All fields are required.");
-      return;
-    }
-    if (form.password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (!form.email.trim() || !form.password.trim()) {
+      setError("Email and password are required.");
       return;
     }
 
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/signup", form);
+      const { data } = await api.post("/auth/login", form);
       setAuth(data.user);
       navigate("/dashboard");
     } catch (err) {
-      setError(err.response?.data?.message || "Something went wrong. Try again.");
+      setError(err.response?.data?.message || "Invalid email or password.");
     } finally {
       setLoading(false);
     }
@@ -44,9 +40,9 @@ export default function SignUp() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4 relative overflow-hidden">
 
-      {/* Ambient background blobs */}
-      <div className="absolute -top-30 -left-20 w-105 h-105 rounded-full bg-red-700/20 blur-[120px] pointer-events-none" />
-      <div className="absolute -bottom-25 -right-15 w-90 h-90 rounded-full bg-red-900/20 blur-[100px] pointer-events-none" />
+      {/* Ambient blobs */}
+      <div className="absolute -top-20 -right-25 w-100 h-100 rounded-full bg-red-700/20 blur-[120px] pointer-events-none" />
+      <div className="absolute -bottom-30 -left-20 w-95 h-95 rounded-full bg-red-900/15 blur-[100px] pointer-events-none" />
 
       <div className="w-full max-w-md relative z-10">
 
@@ -69,8 +65,8 @@ export default function SignUp() {
           }}
         >
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-white tracking-tight">Create your account</h1>
-            <p className="text-sm text-zinc-400 mt-1">Start practising interviews with AI today</p>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Welcome back</h1>
+            <p className="text-sm text-zinc-400 mt-1">Sign in to continue your interview prep</p>
           </div>
 
           {/* Error */}
@@ -82,22 +78,6 @@ export default function SignUp() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-
-            {/* Name */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400 uppercase tracking-widest">
-                Full Name
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                placeholder="John Doe"
-                autoComplete="name"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 outline-none transition-all duration-200 focus:border-red-500/60 focus:bg-white/8 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.1)]"
-              />
-            </div>
 
             {/* Email */}
             <div className="space-y-1.5">
@@ -117,17 +97,22 @@ export default function SignUp() {
 
             {/* Password */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400 uppercase tracking-widest">
-                Password
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-zinc-400 uppercase tracking-widest">
+                  Password
+                </label>
+                <span className="text-xs text-red-400 hover:text-red-300 cursor-pointer transition-colors">
+                  Forgot password?
+                </span>
+              </div>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
                   name="password"
                   value={form.password}
                   onChange={handleChange}
-                  placeholder="Min. 6 characters"
-                  autoComplete="new-password"
+                  placeholder="Your password"
+                  autoComplete="current-password"
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder-zinc-600 outline-none transition-all duration-200 focus:border-red-500/60 focus:bg-white/8 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.1)]"
                 />
                 <button
@@ -149,10 +134,10 @@ export default function SignUp() {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Creating account…
+                  Signing in…
                 </>
               ) : (
-                "Create account"
+                "Sign in"
               )}
             </button>
           </form>
@@ -165,21 +150,15 @@ export default function SignUp() {
           </div>
 
           <p className="text-center text-sm text-zinc-500">
-            Already have an account?{" "}
+            Don't have an account?{" "}
             <Link
-              to="/signin"
+              to="/signup"
               className="text-red-400 hover:text-red-300 font-medium transition-colors"
             >
-              Sign in
+              Sign up
             </Link>
           </p>
         </div>
-
-        <p className="text-center text-xs text-zinc-700 mt-6">
-          By signing up you agree to our{" "}
-          <span className="text-zinc-500 cursor-pointer hover:text-zinc-400">Terms</span> &{" "}
-          <span className="text-zinc-500 cursor-pointer hover:text-zinc-400">Privacy Policy</span>
-        </p>
       </div>
     </div>
   );
