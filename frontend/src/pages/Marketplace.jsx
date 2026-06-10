@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../api/axios";
@@ -23,9 +23,21 @@ const DIFFICULTIES = ["all", "easy", "medium", "hard"];
 const EXPERIENCES = ["all", "intern", "junior", "mid-level", "senior", "lead"];
 
 const DIFF_STYLE = {
-  easy: { text: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20", icon: <Star className="w-3 h-3" /> },
-  medium: { text: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20", icon: <Zap className="w-3 h-3" /> },
-  hard: { text: "text-red-400", bg: "bg-red-500/10 border-red-500/20", icon: <Flame className="w-3 h-3" /> },
+  easy: {
+    text: "text-emerald-400",
+    bg: "bg-emerald-500/10 border-emerald-500/20",
+    icon: <Star className="w-3 h-3" />,
+  },
+  medium: {
+    text: "text-amber-400",
+    bg: "bg-amber-500/10 border-amber-500/20",
+    icon: <Zap className="w-3 h-3" />,
+  },
+  hard: {
+    text: "text-red-400",
+    bg: "bg-red-500/10 border-red-500/20",
+    icon: <Flame className="w-3 h-3" />,
+  },
 };
 
 export default function Marketplace() {
@@ -41,27 +53,28 @@ export default function Marketplace() {
   const [experience, setExperience] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
 
+  const hasShownToast = useRef(false);
+
   useEffect(() => {
     const fetchInterviews = async () => {
       try {
         const { data } = await api.get("/interviews/public/list");
-        const interviewList = Array.isArray(data) ? data : data.interviews ?? [];
+        const interviewList = Array.isArray(data)
+          ? data
+          : (data.interviews ?? []);
         setInterviews(interviewList);
 
-        if (interviewList.length === 0) {
-          toast.info("✨ Welcome to the Marketplace", {
-            description: "No interviews available yet. Be the first to share one!",
-            duration: 5000,
-            icon: "🎯",
-          });
-        } else {
+        if (!hasShownToast.current) {
+          hasShownToast.current = true;
+
           toast.success(`📚 ${interviewList.length} interviews loaded`, {
-            description: "Find the perfect interview practice for your next role",
-            duration: 3000,
+            description:
+              "Find the perfect interview practice for your next role",
           });
         }
       } catch (err) {
-        const errorMsg = err.response?.data?.message ?? "Failed to load marketplace.";
+        const errorMsg =
+          err.response?.data?.message ?? "Failed to load marketplace.";
         setError(errorMsg);
         toast.error("Failed to load marketplace", {
           description: errorMsg,
@@ -76,13 +89,16 @@ export default function Marketplace() {
   }, []);
 
   const handleTake = async (interview) => {
-    const roleName = interview.role || interview.jobRole || interview.title || "Interview";
+    const roleName =
+      interview.role || interview.jobRole || interview.title || "Interview";
 
     setTaking(interview._id);
 
     toast.promise(
       (async () => {
-        const { data: cloned } = await api.post(`/interviews/${interview._id}/take`);
+        const { data: cloned } = await api.post(
+          `/interviews/${interview._id}/take`,
+        );
         const newId = cloned._id ?? cloned.interview?._id;
 
         if (!newId) {
@@ -90,7 +106,7 @@ export default function Marketplace() {
         }
 
         await api.post(`/interviews/${newId}/start`);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
         return { newId, roleName };
       })(),
@@ -109,7 +125,7 @@ export default function Marketplace() {
         finally: () => {
           setTaking(null);
         },
-      }
+      },
     );
   };
 
@@ -119,20 +135,29 @@ export default function Marketplace() {
     const roleToSearch = iv.role || iv.jobRole || iv.title || "";
     const levelToSearch = iv.experienceLevel || iv.experience || iv.level || "";
 
-    const matchSearch = !q ||
+    const matchSearch =
+      !q ||
       roleToSearch.toLowerCase().includes(q) ||
       levelToSearch.toLowerCase().includes(q);
 
     const interviewDifficulty = iv.difficulty?.toLowerCase() || "";
-    const matchDiff = difficulty === "all" || interviewDifficulty === difficulty;
+    const matchDiff =
+      difficulty === "all" || interviewDifficulty === difficulty;
 
-    const interviewExperience = (iv.experienceLevel || iv.experience || "").toLowerCase();
+    const interviewExperience = (
+      iv.experienceLevel ||
+      iv.experience ||
+      ""
+    ).toLowerCase();
     const matchExp = experience === "all" || interviewExperience === experience;
 
     return matchSearch && matchDiff && matchExp;
   });
 
-  const activeFilters = (difficulty !== "all" ? 1 : 0) + (experience !== "all" ? 1 : 0) + (search ? 1 : 0);
+  const activeFilters =
+    (difficulty !== "all" ? 1 : 0) +
+    (experience !== "all" ? 1 : 0) +
+    (search ? 1 : 0);
 
   const clearFilters = () => {
     setDifficulty("all");
@@ -147,7 +172,12 @@ export default function Marketplace() {
   };
 
   useEffect(() => {
-    if (!loading && interviews.length > 0 && filtered.length === 0 && (search || difficulty !== "all" || experience !== "all")) {
+    if (
+      !loading &&
+      interviews.length > 0 &&
+      filtered.length === 0 &&
+      (search || difficulty !== "all" || experience !== "all")
+    ) {
       toast.info("No matching interviews found", {
         description: "Try adjusting your search or filters",
         duration: 4000,
@@ -158,7 +188,14 @@ export default function Marketplace() {
         },
       });
     }
-  }, [filtered.length, loading, interviews.length, search, difficulty, experience]);
+  }, [
+    filtered.length,
+    loading,
+    interviews.length,
+    search,
+    difficulty,
+    experience,
+  ]);
 
   if (loading) return <Loader message="Loading marketplace…" />;
 
@@ -175,7 +212,9 @@ export default function Marketplace() {
             <div className="w-6 h-6 rounded-md bg-red-600/20 border border-red-500/30 flex items-center justify-center">
               <Globe className="w-3.5 h-3.5 text-red-400" />
             </div>
-            <span className="font-semibold text-sm text-white/90">Marketplace</span>
+            <span className="font-semibold text-sm text-white/90">
+              Marketplace
+            </span>
           </div>
 
           <button
@@ -189,9 +228,12 @@ export default function Marketplace() {
 
       <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <div className="space-y-1 pb-2">
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">Community interviews</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">
+            Community interviews
+          </h1>
           <p className="text-sm text-white/35">
-            Practice with real interview sets shared by the community — clone any one and start instantly.
+            Practice with real interview sets shared by the community — clone
+            any one and start instantly.
           </p>
         </div>
 
@@ -217,10 +259,11 @@ export default function Marketplace() {
 
           <button
             onClick={() => setShowFilters((p) => !p)}
-            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border text-sm transition-all ${activeFilters > 0
+            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border text-sm transition-all ${
+              activeFilters > 0
                 ? "bg-red-600/15 border-red-500/40 text-red-400"
                 : "bg-white/[0.04] border-white/[0.08] text-white/40 hover:text-white/70 hover:border-white/20"
-              }`}
+            }`}
           >
             <Filter className="w-4 h-4" />
             <span className="hidden sm:inline">Filters</span>
@@ -236,7 +279,9 @@ export default function Marketplace() {
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-md p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-white/30 mb-2">Difficulty</p>
+                <p className="text-[10px] uppercase tracking-widest text-white/30 mb-2">
+                  Difficulty
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {DIFFICULTIES.map((d) => (
                     <button
@@ -250,10 +295,11 @@ export default function Marketplace() {
                           });
                         }
                       }}
-                      className={`text-xs px-3 py-1.5 rounded-lg border capitalize transition-all ${difficulty === d
+                      className={`text-xs px-3 py-1.5 rounded-lg border capitalize transition-all ${
+                        difficulty === d
                           ? "bg-red-600/20 border-red-500/40 text-red-400"
                           : "bg-white/[0.04] border-white/[0.07] text-white/40 hover:text-white/70"
-                        }`}
+                      }`}
                     >
                       {d === "all" ? "Any" : d}
                     </button>
@@ -262,7 +308,9 @@ export default function Marketplace() {
               </div>
 
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-white/30 mb-2">Experience</p>
+                <p className="text-[10px] uppercase tracking-widest text-white/30 mb-2">
+                  Experience
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {EXPERIENCES.map((e) => (
                     <button
@@ -276,10 +324,11 @@ export default function Marketplace() {
                           });
                         }
                       }}
-                      className={`text-xs px-3 py-1.5 rounded-lg border capitalize transition-all ${experience === e
+                      className={`text-xs px-3 py-1.5 rounded-lg border capitalize transition-all ${
+                        experience === e
                           ? "bg-red-600/20 border-red-500/40 text-red-400"
                           : "bg-white/[0.04] border-white/[0.07] text-white/40 hover:text-white/70"
-                        }`}
+                      }`}
                     >
                       {e === "all" ? "Any" : e}
                     </button>
@@ -325,7 +374,10 @@ export default function Marketplace() {
         )}
 
         {filtered.length === 0 ? (
-          <EmptyState hasFilters={!!search || activeFilters > 0} onClear={clearFilters} />
+          <EmptyState
+            hasFilters={!!search || activeFilters > 0}
+            onClear={clearFilters}
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((iv) => (
@@ -346,8 +398,10 @@ export default function Marketplace() {
 function MarketplaceCard({ interview, taking, onTake }) {
   const diff = DIFF_STYLE[interview.difficulty?.toLowerCase()] ?? null;
 
-  const displayRole = interview.role || interview.jobRole || interview.title || "Untitled Role";
-  const displayExperience = interview.experienceLevel || interview.experience || interview.level || "";
+  const displayRole =
+    interview.role || interview.jobRole || interview.title || "Untitled Role";
+  const displayExperience =
+    interview.experienceLevel || interview.experience || interview.level || "";
 
   return (
     <div className="group relative rounded-2xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-md overflow-hidden hover:border-red-500/30 hover:bg-white/[0.05] transition-all duration-300">
@@ -359,7 +413,9 @@ function MarketplaceCard({ interview, taking, onTake }) {
             {displayRole}
           </h3>
           {diff && (
-            <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium capitalize flex-shrink-0 ${diff.bg} ${diff.text}`}>
+            <span
+              className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium capitalize flex-shrink-0 ${diff.bg} ${diff.text}`}
+            >
               {diff.icon}
               {interview.difficulty}
             </span>
@@ -395,7 +451,9 @@ function MarketplaceCard({ interview, taking, onTake }) {
               <User className="w-2.5 h-2.5" />
             </div>
             <span className="truncate max-w-[100px]">
-              {interview.createdBy?.name ?? interview.createdBy?.username ?? "Community"}
+              {interview.createdBy?.name ??
+                interview.createdBy?.username ??
+                "Community"}
             </span>
           </div>
           <span className="text-[11px] text-white/20">
@@ -406,13 +464,28 @@ function MarketplaceCard({ interview, taking, onTake }) {
         <button
           onClick={onTake}
           disabled={taking}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold transition-all shadow-lg shadow-red-900/30 disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98]"
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-rose-900/80 hover:bg-rose-800/80 text-white text-sm font-semibold transition-all shadow-lg shadow-red-900/30 disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98]"
         >
           {taking ? (
             <>
-              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              <svg
+                className="w-3.5 h-3.5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                />
               </svg>
               Starting…
             </>
@@ -451,8 +524,8 @@ function EmptyState({ hasFilters, onClear }) {
         </button>
       ) : (
         <button
-          onClick={() => window.location.href = "/interview/create"}
-          className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold transition-all shadow-lg shadow-red-900/30"
+          onClick={() => (window.location.href = "/interview/create")}
+          className="px-4 py-2 rounded-xl bg-rose-900/80 hover:bg-rose-800/80 text-white text-sm font-semibold transition-all shadow-lg shadow-red-900/30"
         >
           Create your first interview →
         </button>

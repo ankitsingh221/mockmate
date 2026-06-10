@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../api/axios";
@@ -15,50 +15,85 @@ import {
 } from "lucide-react";
 import { formatDate } from "../utils/timeFormat";
 
-
 const STATUS_MAP = {
-  scheduled:    { label: "Scheduled",    colour: "bg-white/[0.06]   text-white/40  border border-white/[0.08]"     },
-  "in-progress":{ label: "In Progress",  colour: "bg-amber-500/10   text-amber-400 border border-amber-500/20"     },
-  completed:    { label: "Completed",    colour: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" },
+  scheduled: { label: "Scheduled", colour: "bg-white/[0.06] text-white/40 border border-white/[0.08]" },
+  "in-progress": { label: "In Progress", colour: "bg-amber-500/10 text-amber-400 border border-amber-500/20" },
+  completed: { label: "Completed", colour: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" },
 };
 
 const DIFFICULTY_COLOUR = {
-  easy:   "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20",
-  medium: "bg-amber-500/15   text-amber-400   border border-amber-500/20",
-  hard:   "bg-red-500/15     text-red-400     border border-red-500/20",
+  easy: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20",
+  medium: "bg-amber-500/15 text-amber-400 border border-amber-500/20",
+  hard: "bg-red-500/15 text-red-400 border border-red-500/20",
+};
+
+// Local storage utility
+const storage = {
+  getDeleted: () => {
+    try {
+      return JSON.parse(localStorage.getItem('deletedInterviews') || '[]');
+    } catch {
+      return [];
+    }
+  },
+  addDeleted: (id) => {
+    try {
+      const deleted = storage.getDeleted();
+      if (!deleted.includes(id)) {
+        deleted.push(id);
+        // Keep only last 50 to prevent unlimited growth
+        if (deleted.length > 50) deleted.shift();
+        localStorage.setItem('deletedInterviews', JSON.stringify(deleted));
+      }
+    } catch (e) {
+      console.error('Failed to update deleted cache:', e);
+    }
+  },
+  clearDeleted: () => {
+    try {
+      localStorage.removeItem('deletedInterviews');
+    } catch (e) {
+      console.error('Failed to clear deleted cache:', e);
+    }
+  }
 };
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [interviews, setInterviews] = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
-  useEffect(() => {
-    const fetchInterviews = async () => {
-      try {
-        const { data } = await api.get("/interviews/my");
-        const interviewList = Array.isArray(data) ? data : data.interviews ?? [];
-        setInterviews(interviewList);
-      } catch (err) {
-        const errorMsg = err.response?.data?.message ?? "Failed to load interviews.";
-        setError(errorMsg);
-        toast.error(errorMsg);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInterviews();
+  const fetchInterviews = useCallback(async () => {
+    try {
+      const { data } = await api.get("/interviews/my");
+      let interviewList = Array.isArray(data) ? data : data.interviews ?? [];
+      
+      // Filter out locally deleted interviews
+      const deletedInterviews = storage.getDeleted();
+      interviewList = interviewList.filter(interview => !deletedInterviews.includes(interview._id));
+      
+      setInterviews(interviewList);
+    } catch (err) {
+      const errorMsg = err.response?.data?.message ?? "Failed to load interviews.";
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const handleDelete = async (interviewId, interviewTitle, isTemplate) => {
+  useEffect(() => {
+    fetchInterviews();
+  }, [fetchInterviews]);
+
+  const handleDelete = useCallback(async (interviewId, interviewTitle, isTemplate) => {
     toast.custom((t) => {
       const isMarketplaceItem = isTemplate;
       const deleteMessage = isMarketplaceItem 
         ? "This interview will be removed from your dashboard. The original interview will remain available in the marketplace."
-        : "You're about to permanently delete this interview and all associated reports, scores, and feedback.This action cannot be undone.";
+        : "You're about to permanently delete this interview and all associated reports, scores, and feedback. This action cannot be undone.";
 
       return (
         <div className="bg-[#1a1a1a] border border-red-500/20 rounded-lg p-4 shadow-xl max-w-sm">
@@ -88,15 +123,16 @@ export default function Dashboard() {
                     toast.dismiss(t);
                     setDeletingId(interviewId);
                     
+                    // Optimistic update
+                    setInterviews(prev => prev.filter(i => i._id !== interviewId));
+                    
                     try {
                       const response = await api.delete(`/interviews/${interviewId}`);
-                      console.log("Delete response:", response.data);
                       
-                      // Remove from UI regardless
-                      setInterviews(prev => prev.filter(i => i._id !== interviewId));
+                      // Cache the deletion
+                      storage.addDeleted(interviewId);
                       
-                      // Show appropriate message
-                      if (response.data.deletedFromDB === false) {
+                      if (response.data?.deletedFromDB === false) {
                         toast.success("Removed from your dashboard", {
                           description: "The interview remains available in the marketplace",
                           icon: "👋",
@@ -105,9 +141,9 @@ export default function Dashboard() {
                         toast.success("Interview deleted successfully");
                       }
                     } catch (err) {
-                      console.error("Delete error:", err);
-                      const errorMsg = err.response?.data?.message || "Failed to delete interview";
-                      toast.error(errorMsg);
+                      // Rollback on error
+                      await fetchInterviews();
+                      toast.error(err.response?.data?.message || "Failed to delete interview");
                     } finally {
                       setDeletingId(null);
                     }
@@ -123,7 +159,7 @@ export default function Dashboard() {
         </div>
       );
     }, { duration: 5000 });
-  };
+  }, [deletingId, fetchInterviews]);
 
   const completed = interviews.filter((i) => i.status === "completed");
   const inProgress = interviews.filter((i) => i.status === "in-progress");
@@ -135,7 +171,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#080808] text-white">
-
       {/* Ambient glows */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-red-600/10 blur-[120px]" />
@@ -153,7 +188,7 @@ export default function Dashboard() {
           </div>
           <button
             onClick={() => navigate("/interview/create")}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors shadow-lg shadow-red-900/30"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-900/80 hover:bg-rose-800/80 text-white text-sm font-medium transition-colors shadow-lg shadow-red-900/30"
           >
             <Plus className="w-4 h-4" />
             New Interview
@@ -162,7 +197,6 @@ export default function Dashboard() {
       </div>
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-
         {/* Error banner */}
         {error && (
           <div className="bg-red-950/40 border border-red-800/40 text-red-300 text-sm px-4 py-3 rounded-xl">
@@ -173,10 +207,10 @@ export default function Dashboard() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { icon: <BarChart2 className="w-4 h-4 text-red-400" />,   label: "Total",       value: interviews.length },
-            { icon: <Clock     className="w-4 h-4 text-amber-400" />, label: "In Progress", value: inProgress.length },
-            { icon: <Briefcase className="w-4 h-4 text-white/60" />,  label: "Completed",   value: completed.length  },
-            { icon: <BarChart2 className="w-4 h-4 text-red-400" />,   label: "Avg. Score",  value: avgScore !== null ? `${avgScore}%` : "—" },
+            { icon: <BarChart2 className="w-4 h-4 text-red-400" />, label: "Total", value: interviews.length },
+            { icon: <Clock className="w-4 h-4 text-amber-400" />, label: "In Progress", value: inProgress.length },
+            { icon: <Briefcase className="w-4 h-4 text-white/60" />, label: "Completed", value: completed.length },
+            { icon: <BarChart2 className="w-4 h-4 text-red-400" />, label: "Avg. Score", value: avgScore !== null ? `${avgScore}%` : "—" },
           ].map(({ icon, label, value }) => (
             <div
               key={label}
@@ -222,7 +256,6 @@ export default function Dashboard() {
   );
 }
 
-
 function InterviewCard({ interview, onOpen, onResume, onDelete, isDeleting }) {
   const { label: statusLabel, colour: statusColour } =
     STATUS_MAP[interview.status] ?? { label: interview.status, colour: "bg-white/[0.06] text-white/40 border border-white/[0.08]" };
@@ -243,9 +276,14 @@ function InterviewCard({ interview, onOpen, onResume, onDelete, isDeleting }) {
       }
       
       await api.post(`/interviews/${interview._id}/publish`);
-      toast.success("Shared to marketplace!");
+      toast.success("Shared to marketplace!", {
+        icon: "🌍",
+        description: "Your interview is now available to the community",
+      });
     } catch (err) {
-      toast.error("Failed to share",err);
+      toast.error("Failed to share", {
+        description: err.response?.data?.message || "Please try again",
+      });
     }
   };
 
@@ -327,7 +365,7 @@ function InterviewCard({ interview, onOpen, onResume, onDelete, isDeleting }) {
             {isCompleted && !isMarketplaceTemplate && (
               <button
                 onClick={handleShare}
-                className="text-xs text-white/40 hover:text-emerald-400 transition-colors"
+                className="text-white/40 hover:text-emerald-400 transition-colors"
                 title="Share to marketplace"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -359,7 +397,6 @@ function InterviewCard({ interview, onOpen, onResume, onDelete, isDeleting }) {
   );
 }
 
-//  Empty state 
 function EmptyState({ onNew }) {
   return (
     <div className="flex flex-col items-center justify-center py-28 text-center">
@@ -372,7 +409,7 @@ function EmptyState({ onNew }) {
       </p>
       <button
         onClick={onNew}
-        className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors shadow-lg shadow-red-900/30"
+        className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-rose-900/80 hover:bg-rose-800/80 text-whitetext-sm font-medium transition-colors shadow-lg shadow-red-900/30"
       >
         <Plus className="w-4 h-4" />
         Create your first interview

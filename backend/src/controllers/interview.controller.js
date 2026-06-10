@@ -432,14 +432,28 @@ export const getPublicInterviews = async (req, res) => {
   try {
     const interviews = await Interview.find({
       isPublic: true,
-      type: "template" // only show template interview from market place
+      type: "template"
     })
-    .sort({createdAt : -1})
-      .select("role experience difficulty duration createdAt userId")
-      .populate("userId", "name email ");
+    .sort({ createdAt: -1 })
+    .select("role experience difficulty duration createdAt userId")
+    .populate("userId", "name email username");
+    
+    // Transform the response to match frontend expectations
+    const transformedInterviews = interviews.map(interview => ({
+      ...interview.toObject(),
+      createdBy: {
+        name: interview.userId?.name,
+        username: interview.userId?.username,
+        email: interview.userId?.email
+      },
+      // Ensure consistent field names
+      role: interview.role,
+      experienceLevel: interview.experience,
+    }));
+    
     return res.status(200).json({
       success: true,
-      interviews,
+      interviews: transformedInterviews,
     });
   } catch (error) {
     return res.status(500).json({

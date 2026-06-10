@@ -360,7 +360,7 @@ export default function CreateInterview() {
             onClick={handleNext}
             disabled={!canNext() || submitting}
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all
-              bg-red-600 hover:bg-red-500 text-white
+              bg-rose-900/80 hover:bg-rose-800/80 text-white
               disabled:opacity-30 disabled:cursor-not-allowed
               shadow-lg shadow-red-900/30
               active:scale-[0.98]"
