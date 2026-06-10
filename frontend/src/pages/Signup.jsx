@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Mic, Loader2, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 import { useAuthStore } from "../store/authStore";
 import api from "../api/axios";
 
@@ -20,22 +21,55 @@ export default function SignUp() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
-      setError("All fields are required.");
+    
+    if (!form.name.trim()) {
+      setError("Name is required");
+      toast.error("Name is required");
+      return;
+    }
+    if (!form.email.trim()) {
+      setError("Email is required");
+      toast.error("Email is required");
+      return;
+    }
+    if (!form.password.trim()) {
+      setError("Password is required");
+      toast.error("Password is required");
       return;
     }
     if (form.password.length < 6) {
-      setError("Password must be at least 6 characters.");
+      setError("Password must be at least 6 characters");
+      toast.error("Password must be at least 6 characters");
       return;
     }
 
     setLoading(true);
+    const loadingToast = toast.loading("Creating your account...");
+
     try {
       const { data } = await api.post("/auth/signup", form);
       setAuth(data.user);
+      
+      // Success toast with welcome message
+      toast.success(`Welcome to MockMate, ${form.name}! 🎉`, {
+        id: loadingToast,
+        description: "Your account has been created successfully. Ready to start practicing?",
+        duration: 5000,
+        icon: "🚀",
+        action: {
+          label: "Start Interview",
+          onClick: () => navigate("/dashboard"),
+        },
+      });
+      
       navigate("/dashboard");
     } catch (err) {
-      setError(err.response?.data?.message || "Something went wrong. Try again.");
+      const errorMsg = err.response?.data?.message || "Something went wrong. Try again.";
+      setError(errorMsg);
+      toast.error(errorMsg, {
+        id: loadingToast,
+        duration: 4000,
+      });
     } finally {
       setLoading(false);
     }
@@ -93,7 +127,7 @@ export default function SignUp() {
                 name="name"
                 value={form.name}
                 onChange={handleChange}
-                placeholder="John Doe"
+                placeholder="Enter your name"
                 autoComplete="name"
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 outline-none transition-all duration-200 focus:border-red-500/60 focus:bg-white/8 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.1)]"
               />

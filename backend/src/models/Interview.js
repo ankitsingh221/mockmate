@@ -13,37 +13,22 @@ const interviewSchema = new mongoose.Schema(
       enum: ["template", "instance"],
       default: "instance",
     },
-      
+
     isPublic: {
       type: Boolean,
       default: false,
     },
 
-     templateId: {
+    templateId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Interview",
       default: null,
     },
 
-    role: {
-      type: String,
-      required: true,
-    },
-
-    experience: {
-      type: String,
-      required: true,
-    },
-
-    difficulty: {
-      type: String,
-      required: true,
-    },
-
-    duration: {
-      type: Number,
-      required: true,
-    },
+    role: { type: String, required: true },
+    experience: { type: String, required: true },
+    difficulty: { type: String, required: true },
+    duration: { type: Number, required: true },
 
     status: {
       type: String,
@@ -52,44 +37,23 @@ const interviewSchema = new mongoose.Schema(
     },
 
     startTime: Date,
-
     endTime: Date,
 
-    // ai control
-    currentRound: {
-      type: Number,
-      default: 0,
-    },
+    currentRound: { type: Number, default: 0 },
+    maxRounds: { type: Number, default: 10 },
+    currentQuestion: { type: String, default: "" },
 
-    maxRounds: {
-      type: Number,
-      default: 10,
-    },
-
-    currentQuestion: {
-      type: String,
-      default: "",
-    },
-
-    overallScore: {
-      type: Number,
-      default: 0,
-    },
-
+    overallScore: { type: Number, default: 0 },
     strengths: [String],
-
     weaknesses: [String],
-
     suggestions: [String],
+    summary: { type: String, default: "" },
 
     transcript: [
       {
         questionNumber: Number,
-
         question: String,
-
         answer: String,
-
         evaluation: {
           technicalScore: Number,
           communicationScore: Number,
@@ -97,7 +61,6 @@ const interviewSchema = new mongoose.Schema(
           overallScore: Number,
           feedback: String,
         },
-
         askedAt: {
           type: Date,
           default: Date.now,
@@ -105,11 +68,8 @@ const interviewSchema = new mongoose.Schema(
       },
     ],
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
 const Interview = mongoose.model("Interview", interviewSchema);
-
 export default Interview;

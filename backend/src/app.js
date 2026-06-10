@@ -37,8 +37,10 @@ app.use(cookieParser());
 
 
 //rate limitting
+
 // general protection
 app.use(globalLimiter); 
+
 // only for auth routes
 app.use("/api/auth", authLimiter); 
 

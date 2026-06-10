@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Mic, Loader2, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 import { useAuthStore } from "../store/authStore";
 import api from "../api/axios";
 
@@ -22,16 +23,37 @@ export default function SignIn() {
     e.preventDefault();
     if (!form.email.trim() || !form.password.trim()) {
       setError("Email and password are required.");
+      toast.error("Email and password are required");
       return;
     }
 
     setLoading(true);
+    const loadingToast = toast.loading("Signing in...");
+
     try {
       const { data } = await api.post("/auth/login", form);
       setAuth(data.user);
+      
+      // Success toast with user greeting
+      toast.success(`Welcome back, ${data.user.name || data.user.email.split('@')[0]}! 👋`, {
+        id: loadingToast,
+        description: "Ready to continue your interview practice?",
+        duration: 4000,
+        icon: "🎯",
+        action: {
+          label: "Dashboard",
+          onClick: () => navigate("/dashboard"),
+        },
+      });
+      
       navigate("/dashboard");
     } catch (err) {
-      setError(err.response?.data?.message || "Invalid email or password.");
+      const errorMsg = err.response?.data?.message || "Invalid email or password.";
+      setError(errorMsg);
+      toast.error(errorMsg, {
+        id: loadingToast,
+        duration: 4000,
+      });
     } finally {
       setLoading(false);
     }
@@ -101,9 +123,18 @@ export default function SignIn() {
                 <label className="text-xs font-medium text-zinc-400 uppercase tracking-widest">
                   Password
                 </label>
-                <span className="text-xs text-red-400 hover:text-red-300 cursor-pointer transition-colors">
+                <button
+                  type="button"
+                  onClick={() => {
+                    toast.info("Reset password feature coming soon!", {
+                      description: "Please contact support to reset your password",
+                      duration: 3000,
+                    });
+                  }}
+                  className="text-xs text-red-400 hover:text-red-300 cursor-pointer transition-colors"
+                >
                   Forgot password?
-                </span>
+                </button>
               </div>
               <div className="relative">
                 <input

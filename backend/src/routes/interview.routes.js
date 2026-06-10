@@ -10,6 +10,7 @@ import {
   getPublicInterviews,
   takeInterview,
   makeInterviewPublic,
+  deleteInterview,
 } from "../controllers/interview.controller.js";
 
 import { protect } from "../middleware/auth.middleware.js";
@@ -21,7 +22,6 @@ router.use(protect);
 
 
 router.post("/", createInterview);
-
 
 router.get("/my", getMyInterviews);
 
@@ -36,11 +36,11 @@ router.post("/:id/end", endInterview);
 
 // Make interview public 
 router.post("/:id/publish", makeInterviewPublic);
-
 // Get all public interviews
 router.get("/public/list", getPublicInterviews);
 
-// Take a public interview (clone system)
+// Take a public interview 
 router.post("/:id/take", takeInterview);
 
+router.delete("/:id",  deleteInterview);
 export default router;

@@ -8,7 +8,6 @@ import { generateFinalReportAI } from "../services/report.service.js";
 import { generateFirstQuestionAI } from "../services/firstQuestion.service.js";
 import { checkOwnership } from "../lib/checkOwnerShip.js";
 
-
 export const createInterview = async (req, res) => {
   try {
     const { role, experience, difficulty, duration } = req.body;
@@ -28,7 +27,7 @@ export const createInterview = async (req, res) => {
       duration,
       type: "instance", // setting tyep  so getMyInterviews query works
     });
-
+    console.log("BODY:", req.body);
     res.status(201).json({
       success: true,
       interview,
@@ -41,7 +40,6 @@ export const createInterview = async (req, res) => {
     });
   }
 };
-
 
 export const startInterview = async (req, res) => {
   try {
@@ -117,7 +115,6 @@ export const startInterview = async (req, res) => {
     });
   }
 };
-
 
 export const submitAnswer = async (req, res) => {
   try {
@@ -229,7 +226,6 @@ export const submitAnswer = async (req, res) => {
   }
 };
 
-
 export const endInterview = async (req, res) => {
   try {
     const { id } = req.params;
@@ -271,6 +267,13 @@ export const endInterview = async (req, res) => {
       });
     }
 
+    if (!interview.transcript || interview.transcript.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Answer at least one question before ending the interview",
+      });
+    }
+
     // Generate final AI report
     const report = await generateFinalReportAI({
       role: interview.role,
@@ -280,12 +283,12 @@ export const endInterview = async (req, res) => {
 
     // Persist all report fields
     interview.overallScore = report.overallScore;
-    interview.strengths    = report.strengths;
-    interview.weaknesses   = report.weaknesses;
-    interview.suggestions  = report.suggestions;
-    interview.summary      = report.summary;
+    interview.strengths = report.strengths;
+    interview.weaknesses = report.weaknesses;
+    interview.suggestions = report.suggestions;
+    interview.summary = report.summary;
 
-    interview.status  = "completed";
+    interview.status = "completed";
     interview.endTime = new Date();
 
     await interview.save();
@@ -294,23 +297,24 @@ export const endInterview = async (req, res) => {
       success: true,
       message: "Interview completed successfully",
       data: {
-        interviewId:  interview._id,
+        interviewId: interview._id,
         overallScore: report.overallScore,
-        strengths:    report.strengths,
-        weaknesses:   report.weaknesses,
-        suggestions:  report.suggestions,
-        summary:      report.summary,
+        strengths: report.strengths,
+        weaknesses: report.weaknesses,
+        suggestions: report.suggestions,
+        summary: report.summary,
       },
     });
   } catch (error) {
-    console.error("end interview error:", error.message);
+    console.error("END INTERVIEW ERROR:");
+    console.error(error);
+
     return res.status(500).json({
       success: false,
-      message: "Failed to end interview",
+      message: error.message,
     });
   }
 };
-
 
 export const getInterviewById = async (req, res) => {
   try {
@@ -351,13 +355,13 @@ export const getInterviewById = async (req, res) => {
   }
 };
 
-
 export const getMyInterviews = async (req, res) => {
   try {
-  
+    // BUG FIX: was filtering `type: "instance"` which excluded published interviews
+    // (makeInterviewPublic sets type → "template", making them disappear from dashboard)
+    // Solution: query by userId only — show ALL interviews the user created/took
     const interviews = await Interview.find({
       userId: req.user.userId,
-      type: "instance",
     }).sort({ createdAt: -1 });
 
     return res.status(200).json({
@@ -371,7 +375,6 @@ export const getMyInterviews = async (req, res) => {
     });
   }
 };
-
 
 export const makeInterviewPublic = async (req, res) => {
   try {
@@ -425,16 +428,15 @@ export const makeInterviewPublic = async (req, res) => {
   }
 };
 
-
 export const getPublicInterviews = async (req, res) => {
   try {
     const interviews = await Interview.find({
       isPublic: true,
-      type: "template",
+      type: "template" // only show template interview from market place
     })
+    .sort({createdAt : -1})
       .select("role experience difficulty duration createdAt userId")
-      .populate("userId", "name");
-
+      .populate("userId", "name email ");
     return res.status(200).json({
       success: true,
       interviews,
@@ -446,7 +448,6 @@ export const getPublicInterviews = async (req, res) => {
     });
   }
 };
-
 
 export const takeInterview = async (req, res) => {
   try {
@@ -476,14 +477,14 @@ export const takeInterview = async (req, res) => {
     }
 
     const newInterview = await Interview.create({
-      userId:     req.user.userId,
-      type:       "instance",
+      userId: req.user.userId,
+      type: "instance",
       templateId: template._id,
-      role:       template.role,
+      role: template.role,
       experience: template.experience,
       difficulty: template.difficulty,
-      duration:   template.duration,
-      status:     "scheduled",
+      duration: template.duration,
+      status: "scheduled",
     });
 
     return res.status(201).json({
@@ -495,6 +496,75 @@ export const takeInterview = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to take interview",
+    });
+  }
+};
+
+export const deleteInterview = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check authentication
+    if (!req.user?.userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const userId = req.user.userId;
+    
+    // Find the interview
+    const interview = await Interview.findById(id);
+    
+    if (!interview) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Interview not found" 
+      });
+    }
+
+    // Check ownership
+    if (interview.userId.toString() !== userId.toString()) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "You don't have permission to delete this interview" 
+      });
+    }
+
+  
+    if (interview.status === "in-progress") {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Cannot delete an interview that is in progress" 
+      });
+    }
+
+    let message = "";
+    let deletedFromDB = false;
+
+    // If it's a template (marketplace interview), just return success without deleting from DB
+    if (interview.type === "template") {
+      message = "Interview removed from your dashboard (marketplace interview preserved)";
+      deletedFromDB = false;
+      // Don't delete from database - just return success
+    } else {
+      // Delete instance interviews from database
+      await Interview.findByIdAndDelete(id);
+      message = "Interview deleted successfully";
+      deletedFromDB = true;
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message,
+      deletedFromDB
+    });
+  } catch (error) {
+    console.error("Delete interview error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || "Server error while deleting interview" 
     });
   }
 };
