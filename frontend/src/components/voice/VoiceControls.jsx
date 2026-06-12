@@ -1,24 +1,29 @@
-// src/components/voice/VoiceControls.jsx
+
 import { Mic, MicOff, PhoneOff, Phone, Loader2 } from "lucide-react";
 
-/**
- * Props:
- *  status   — "idle" | "connecting" | "active" | "ending" | "ended"
- *  isMuted  — boolean
- *  saving   — boolean
- *  onStart  — () => void
- *  onEnd    — () => void   (opens modal, not direct end)
- *  onMute   — () => void
- */
-export function VoiceControls({ status, isMuted, saving, onStart, onEnd, onMute }) {
-  const isActive     = status === "active";
+//   Props:
+//   status   — "idle" | "connecting" | "active" | "ending" | "ended"
+//    isMuted  — boolean
+//    saving   — boolean
+//   onStart  — () => void
+//    onEnd    — () => void   (opens modal, not direct end)
+//   onMute   — () => void
+
+export function VoiceControls({
+  status,
+  isMuted,
+  saving,
+  onStart,
+  onEnd,
+  onMute,
+}) {
+  const isActive = status === "active";
   const isConnecting = status === "connecting";
-  const isBusy       = status === "ended" || status === "ending" || saving;
+  const isBusy = status === "ended" || status === "ending" || saving;
 
   return (
     <div className="w-full space-y-3">
-
-      {/* ── Idle: Start button ──────────────────────────────────────────── */}
+      {/* Start button */}
       {status === "idle" && !saving && (
         <button
           onClick={onStart}
@@ -30,16 +35,17 @@ export function VoiceControls({ status, isMuted, saving, onStart, onEnd, onMute 
         </button>
       )}
 
-      {/* ── Connecting ──────────────────────────────────────────────────── */}
+      {/* Connecting */}
       {isConnecting && (
-        <div className="w-full py-4 rounded-2xl bg-white/[0.04] border border-white/[0.08]
+        <div
+          className="w-full py-4 rounded-2xl bg-white/[0.04] border border-white/[0.08]
           flex items-center justify-center gap-2.5 text-white/40 text-sm"
         >
           <Loader2 className="w-5 h-5 animate-spin" /> Connecting…
         </div>
       )}
 
-      {/* ── Active: Mute + End ───────────────────────────────────────────── */}
+      {/* Active: Mute + End  */}
       {isActive && (
         <div className="flex gap-3">
           <button
@@ -51,10 +57,15 @@ export function VoiceControls({ status, isMuted, saving, onStart, onEnd, onMute 
                   : "bg-white/[0.05] border-white/[0.09] text-white/60 hover:bg-white/[0.09]"
               }`}
           >
-            {isMuted
-              ? <><MicOff className="w-4 h-4" /> Unmute</>
-              : <><Mic    className="w-4 h-4" /> Mute</>
-            }
+            {isMuted ? (
+              <>
+                <MicOff className="w-4 h-4" /> Unmute
+              </>
+            ) : (
+              <>
+                <Mic className="w-4 h-4" /> Mute
+              </>
+            )}
           </button>
 
           <button
@@ -68,19 +79,21 @@ export function VoiceControls({ status, isMuted, saving, onStart, onEnd, onMute 
         </div>
       )}
 
-      {/* ── Saving / generating report ───────────────────────────────────── */}
+      {/* Saving / generating report  */}
       {isBusy && (
-        <div className="w-full py-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]
+        <div
+          className="w-full py-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]
           flex items-center justify-center gap-2 text-white/30 text-sm"
         >
           <Loader2 className="w-4 h-4 animate-spin" /> Generating your report…
         </div>
       )}
 
-      {/* ── Hints ───────────────────────────────────────────────────────── */}
+      {/*  Hints */}
       {isActive && (
         <p className="text-[11px] text-white/20 text-center leading-relaxed">
-          🎙️ Speak naturally — your words appear in real-time within the message bubble
+          🎙️ Speak naturally — your words appear in real-time within the message
+          bubble
         </p>
       )}
 

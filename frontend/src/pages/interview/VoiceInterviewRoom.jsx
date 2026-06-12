@@ -62,7 +62,7 @@ export default function VoiceInterviewRoom() {
   }, [error]);
 
   useEffect(() => {
-    if (status === "ended" && callStarted) handleCallEnded();
+    if (status === "ended" && callStarted) handleCallEnded(); //eslint-disable-line
   }, [status, callStarted]); // eslint-disable-line
 
   const handleStartCall = () => {

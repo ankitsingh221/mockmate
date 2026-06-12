@@ -1,4 +1,4 @@
-// src/components/interview/TimerRing.jsx
+
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { formatTimer } from "../../utils/timeFormat";
@@ -39,7 +39,7 @@ export function TimerRing({ timeLeft, pct, colour, ringColour }) {
   );
 }
 
-// src/components/interview/Spinner.jsx
+
 export function Spinner({ label }) {
   return (
     <div className="flex flex-col items-center gap-3 text-white/30">

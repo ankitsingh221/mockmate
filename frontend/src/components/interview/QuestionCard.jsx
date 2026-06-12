@@ -1,22 +1,10 @@
-// src/components/interview/QuestionCard.jsx
-import { useRef } from "react";
+
 import { Clock, Send } from "lucide-react";
 import { formatTimer } from "../../utils/timeFormat";
 
 const DEFAULT_Q_SECONDS = 120;
 
-/**
- * Props:
- *  question     — string
- *  roundNumber  — number
- *  phase        — "question" | "evaluating" | "feedback"
- *  answer       — string
- *  charCount    — number
- *  onAnswerChange(e)
- *  onKeyDown(e)
- *  onSubmit()
- *  textareaRef  — forwarded ref
- */
+
 export function QuestionCard({
   question,
   roundNumber,
@@ -35,7 +23,7 @@ export function QuestionCard({
 
   return (
     <>
-      {/* ── Question card ──────────────────────────────────────────────────── */}
+      {/* Question card*/}
       <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-md p-6 sm:p-8 relative overflow-hidden">
         <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
 
@@ -53,7 +41,7 @@ export function QuestionCard({
         </p>
       </div>
 
-      {/* ── Answer area ────────────────────────────────────────────────────── */}
+      {/*  Answer area */}
       <div className="flex-1 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <label className="text-xs text-white/35 uppercase tracking-wider">
@@ -82,7 +70,7 @@ export function QuestionCard({
             }`}
         />
 
-        {/* ── Submit row ──────────────────────────────────────────────────── */}
+        {/* Submit row  */}
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-white/20 hidden sm:block">Ctrl + Enter to submit</p>
           <button

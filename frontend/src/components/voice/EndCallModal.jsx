@@ -1,12 +1,7 @@
-// src/components/voice/EndCallModal.jsx
+
 import { PhoneOff } from "lucide-react";
 
-/**
- * Props:
- *  open      — boolean
- *  onClose   — () => void
- *  onConfirm — () => void
- */
+
 export function EndCallModal({ open, onClose, onConfirm }) {
   if (!open) return null;
 

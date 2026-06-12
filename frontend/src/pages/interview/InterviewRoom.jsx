@@ -1,4 +1,4 @@
-// src/pages/interview/InterviewRoom.jsx
+
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Flag, AlertTriangle } from "lucide-react";
@@ -110,7 +110,7 @@ export default function InterviewRoom() {
 
   useEffect(() => {
     if (state.phase === "question") {
-      setAnswer("");
+      setAnswer("");   //eslint-disable-line
       answerRef.current = "";
       setCharCount(0);
       resetTimer(questionSeconds);

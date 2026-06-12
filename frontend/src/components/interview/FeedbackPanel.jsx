@@ -1,15 +1,9 @@
-// src/components/interview/FeedbackPanel.jsx
+
 import { useEffect, useRef } from "react";
 import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
-/**
- * Props:
- *  evaluation   — { overallScore, feedback, technicalScore, communicationScore, correctnessScore }
- *  feedbackTimer — number | null  (countdown seconds)
- *  roundNumber  — number
- *  totalRounds  — number
- */
+
 export function FeedbackPanel({ evaluation, feedbackTimer, roundNumber, totalRounds }) {
   const score  = evaluation?.overallScore ?? evaluation?.score ?? null;
   const isLast = roundNumber >= totalRounds;
