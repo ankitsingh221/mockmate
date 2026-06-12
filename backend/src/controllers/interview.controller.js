@@ -8,9 +8,13 @@ import { generateFinalReportAI } from "../services/report.service.js";
 import { generateFirstQuestionAI } from "../services/firstQuestion.service.js";
 import { checkOwnership } from "../lib/checkOwnerShip.js";
 
+
+
+
 export const createInterview = async (req, res) => {
   try {
-    const { role, experience, difficulty, duration } = req.body;
+    const { role, experience, difficulty, duration, mode } = req.body;
+    // ↑ FIX: destructure mode from body
 
     if (!req.user?.userId) {
       return res.status(401).json({
@@ -19,15 +23,23 @@ export const createInterview = async (req, res) => {
       });
     }
 
+    if (!role || !experience || !difficulty || !duration) {
+      return res.status(400).json({
+        success: false,
+        message: "role, experience, difficulty and duration are required",
+      });
+    }
+
     const interview = await Interview.create({
-      userId: req.user.userId,
+      userId:     req.user.userId,
       role,
       experience,
       difficulty,
       duration,
-      type: "instance", // setting tyep  so getMyInterviews query works
+      mode:       mode ?? "text",   // ← save mode, default to "text"
+      type:       "instance",
     });
-    console.log("BODY:", req.body);
+
     res.status(201).json({
       success: true,
       interview,
@@ -46,53 +58,70 @@ export const startInterview = async (req, res) => {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid interview ID",
-      });
+      return res.status(400).json({ success: false, message: "Invalid interview ID" });
     }
 
     const interview = await Interview.findById(id);
 
     if (!interview) {
-      return res.status(404).json({
-        success: false,
-        message: "Interview not found",
-      });
+      return res.status(404).json({ success: false, message: "Interview not found" });
     }
 
     if (!checkOwnership(interview, req.user.userId)) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied",
-      });
+      return res.status(403).json({ success: false, message: "Access denied" });
     }
 
+    //  already in-progress → return current state 
+    // This handles page refresh / accidental double-start gracefully
     if (interview.status === "in-progress") {
-      return res.status(400).json({
-        success: false,
+      return res.status(200).json({
+        success: true,
         message: "Interview already in progress",
+        data: {
+          interviewId:  interview._id,
+          currentRound: interview.currentRound,
+          maxRounds:    interview.maxRounds,
+          question:     interview.currentQuestion,
+          focusArea:    null,
+        },
       });
     }
 
     if (interview.status === "completed") {
-      return res.status(400).json({
-        success: false,
-        message: "Interview already completed",
+      return res.status(400).json({ success: false, message: "Interview already completed" });
+    }
+
+    // voice interviews don't need a generated first question
+    // VAPI handles the entire conversation — just mark as in-progress
+    if (interview.mode === "voice") {
+      interview.status    = "in-progress";
+      interview.startTime = new Date();
+      await interview.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Voice interview started successfully",
+        data: {
+          interviewId:  interview._id,
+          currentRound: interview.currentRound,
+          maxRounds:    interview.maxRounds,
+          question:     null,   //vapi ask  with itself  , question not needed here
+          mode:         "voice",
+        },
       });
     }
 
-    // Generate the first question using role/experience/difficulty
+    // Text interview —>> generate first question 
     const firstQ = await generateFirstQuestionAI({
-      role: interview.role,
+      role:       interview.role,
       experience: interview.experience,
       difficulty: interview.difficulty,
-      maxRounds: interview.maxRounds,
+      maxRounds:  interview.maxRounds,
     });
 
     interview.currentQuestion = firstQ.question;
-    interview.status = "in-progress";
-    interview.startTime = new Date();
+    interview.status          = "in-progress";
+    interview.startTime       = new Date();
 
     await interview.save();
 
@@ -100,107 +129,111 @@ export const startInterview = async (req, res) => {
       success: true,
       message: "Interview started successfully",
       data: {
-        interviewId: interview._id,
+        interviewId:  interview._id,
         currentRound: interview.currentRound,
-        maxRounds: interview.maxRounds,
-        question: firstQ.question,
-        focusArea: firstQ.focusArea,
+        maxRounds:    interview.maxRounds,
+        question:     firstQ.question,
+        focusArea:    firstQ.focusArea ?? null,
+        mode:         "text",
       },
     });
+
   } catch (error) {
-    console.error("start interview error:", error.message);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to start interview",
-    });
+    console.error("startInterview error:", error.message);
+    return res.status(500).json({ success: false, message: "Failed to start interview" });
   }
 };
 
 export const submitAnswer = async (req, res) => {
   try {
     const { answer } = req.body;
-    const { id } = req.params;
+    const { id }     = req.params;
 
+    // Validation
     if (!answer?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Answer is required",
-      });
+      return res.status(400).json({ success: false, message: "Answer is required" });
     }
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid interview ID",
-      });
+      return res.status(400).json({ success: false, message: "Invalid interview ID" });
     }
 
     const interview = await Interview.findById(id);
 
     if (!interview) {
-      return res.status(404).json({
-        success: false,
-        message: "Interview not found",
-      });
+      return res.status(404).json({ success: false, message: "Interview not found" });
     }
 
-    //  ownership check
     if (!checkOwnership(interview, req.user.userId)) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied",
-      });
+      return res.status(403).json({ success: false, message: "Access denied" });
     }
 
     if (interview.status !== "in-progress") {
-      return res.status(400).json({
-        success: false,
-        message: "Interview is not active",
-      });
+      return res.status(400).json({ success: false, message: "Interview is not active" });
     }
 
     if (!interview.currentQuestion) {
-      return res.status(400).json({
-        success: false,
-        message: "No active question found",
-      });
+      return res.status(400).json({ success: false, message: "No active question found" });
     }
 
-    // AI Evaluation
+    //  Evaluate answer
     const evaluation = await evaluateAnswerAI({
-      role: interview.role,
-      question: interview.currentQuestion,
-      answer,
+      role:       interview.role,
+      question:   interview.currentQuestion,
+      answer:     answer.trim(),
     });
 
-    // Save to transcript
+    // Save to transcript 
     interview.transcript.push({
       questionNumber: interview.currentRound + 1,
-      question: interview.currentQuestion,
-      answer,
+      question:       interview.currentQuestion,
+      answer:         answer.trim(),
       evaluation,
     });
 
     interview.currentRound += 1;
 
     let nextQuestion = null;
+    let report       = null;
+    const isLastRound = interview.currentRound >= interview.maxRounds;
 
-    if (interview.currentRound < interview.maxRounds) {
+    if (!isLastRound) {
+      //Generate next question
       const nextQ = await generateNextQuestionAI({
-        role: interview.role,
-        experience: interview.experience,
-        difficulty: interview.difficulty,
-        transcript: interview.transcript,
+        role:         interview.role,
+        experience:   interview.experience,
+        difficulty:   interview.difficulty,
+        transcript:   interview.transcript,
         currentRound: interview.currentRound,
-        maxRounds: interview.maxRounds,
+        maxRounds:    interview.maxRounds,
       });
 
-      nextQuestion = nextQ.question;
+      nextQuestion              = nextQ.question;
       interview.currentQuestion = nextQuestion;
+
     } else {
-      // All rounds done — mark completed
-      interview.status = "completed";
-      interview.endTime = new Date();
+      //  All rounds done → generate final report before saving 
+      try {
+        report = await generateFinalReportAI({
+          role:       interview.role,
+          experience: interview.experience,
+          transcript: interview.transcript,
+        });
+
+        interview.overallScore = report.overallScore ?? 0;
+        interview.strengths    = report.strengths    ?? [];
+        interview.weaknesses   = report.weaknesses   ?? [];
+        interview.suggestions  = report.suggestions  ?? [];
+        interview.summary      = report.summary      ?? "";
+      } catch (reportErr) {
+        // Don't block completion if report generation fails
+        console.error("Final report generation failed:", reportErr.message);
+        interview.overallScore = 0;
+        interview.summary      = "Report could not be generated. Please try again.";
+      }
+
+      interview.status          = "completed";
+      interview.endTime         = new Date();
       interview.currentQuestion = "";
     }
 
@@ -212,17 +245,24 @@ export const submitAnswer = async (req, res) => {
       data: {
         evaluation,
         currentRound: interview.currentRound,
-        maxRounds: interview.maxRounds,
+        maxRounds:    interview.maxRounds,
         nextQuestion,
-        isCompleted: interview.status === "completed",
+        isCompleted:  interview.status === "completed",
+
+        // include report fields in response so frontend can use them
+        ...(isLastRound && {
+          overallScore: interview.overallScore,
+          strengths:    interview.strengths,
+          weaknesses:   interview.weaknesses,
+          suggestions:  interview.suggestions,
+          summary:      interview.summary,
+        }),
       },
     });
+
   } catch (error) {
-    console.error("submit answer error:", error.message);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to submit answer",
-    });
+    console.error("submitAnswer error:", error.message);
+    return res.status(500).json({ success: false, message: "Failed to submit answer" });
   }
 };
 
@@ -231,65 +271,110 @@ export const endInterview = async (req, res) => {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid interview ID",
-      });
+      return res.status(400).json({ success: false, message: "Invalid interview ID" });
     }
 
     const interview = await Interview.findById(id);
 
     if (!interview) {
-      return res.status(404).json({
-        success: false,
-        message: "Interview not found",
-      });
+      return res.status(404).json({ success: false, message: "Interview not found" });
     }
 
     if (!checkOwnership(interview, req.user.userId)) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied",
-      });
+      return res.status(403).json({ success: false, message: "Access denied" });
     }
 
+    //  already completed → just return the existing report 
     if (interview.status === "completed") {
-      return res.status(400).json({
-        success: false,
+      return res.status(200).json({
+        success: true,
         message: "Interview already completed",
+        data: {
+          interviewId:  interview._id,
+          overallScore: interview.overallScore,
+          strengths:    interview.strengths,
+          weaknesses:   interview.weaknesses,
+          suggestions:  interview.suggestions,
+          summary:      interview.summary,
+        },
       });
     }
 
     if (interview.status !== "in-progress") {
-      return res.status(400).json({
-        success: false,
-        message: "Interview is not in progress",
-      });
+      return res.status(400).json({ success: false, message: "Interview is not in progress" });
     }
 
+    //  Handle voice transcript sent from VAPI frontend
+    const { voiceTranscript, endedBy } = req.body ?? {};
+
+    if (endedBy === "voice" && Array.isArray(voiceTranscript) && voiceTranscript.length > 0) {
+      // Pair interviewer messages with candidate answers
+      const pairs = [];
+      let currentQuestion = null;
+      let questionNumber  = 0;
+
+      for (const turn of voiceTranscript) {
+        if (turn.role === "assistant") {
+          currentQuestion = turn.text;
+        } else if (turn.role === "user" && currentQuestion) {
+          questionNumber += 1;
+          pairs.push({
+            questionNumber,
+            question: currentQuestion,
+            answer:   turn.text,
+            askedAt:  new Date(),
+          });
+          currentQuestion = null;
+        }
+      }
+
+      if (pairs.length > 0) {
+        interview.transcript   = pairs;
+        interview.currentRound = pairs.length;
+      }
+    }
+
+    //  no transcript check — allow ending with 0 answers (voice interviews
+    // may have mic issues etc). Generate report only if there's something to evaluate
     if (!interview.transcript || interview.transcript.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Answer at least one question before ending the interview",
+      // End gracefully with empty report instead of blocking with 400
+      interview.status   = "completed";
+      interview.endTime  = new Date();
+      interview.summary  = "Interview ended before any questions were answered.";
+      interview.overallScore = 0;
+      interview.strengths    = [];
+      interview.weaknesses   = [];
+      interview.suggestions  = [];
+      await interview.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Interview ended",
+        data: {
+          interviewId:  interview._id,
+          overallScore: 0,
+          strengths:    [],
+          weaknesses:   [],
+          suggestions:  [],
+          summary:      "Interview ended before any questions were answered.",
+        },
       });
     }
 
-    // Generate final AI report
+    // Generate final AI report 
     const report = await generateFinalReportAI({
-      role: interview.role,
+      role:       interview.role,
       experience: interview.experience,
       transcript: interview.transcript,
     });
 
-    // Persist all report fields
-    interview.overallScore = report.overallScore;
-    interview.strengths = report.strengths;
-    interview.weaknesses = report.weaknesses;
-    interview.suggestions = report.suggestions;
-    interview.summary = report.summary;
-
-    interview.status = "completed";
-    interview.endTime = new Date();
+    interview.overallScore = report.overallScore ?? 0;
+    interview.strengths    = report.strengths    ?? [];
+    interview.weaknesses   = report.weaknesses   ?? [];
+    interview.suggestions  = report.suggestions  ?? [];
+    interview.summary      = report.summary      ?? "";
+    interview.status       = "completed";
+    interview.endTime      = new Date();
 
     await interview.save();
 
@@ -297,22 +382,17 @@ export const endInterview = async (req, res) => {
       success: true,
       message: "Interview completed successfully",
       data: {
-        interviewId: interview._id,
+        interviewId:  interview._id,
         overallScore: report.overallScore,
-        strengths: report.strengths,
-        weaknesses: report.weaknesses,
-        suggestions: report.suggestions,
-        summary: report.summary,
+        strengths:    report.strengths,
+        weaknesses:   report.weaknesses,
+        suggestions:  report.suggestions,
+        summary:      report.summary,
       },
     });
   } catch (error) {
-    console.error("END INTERVIEW ERROR:");
-    console.error(error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("END INTERVIEW ERROR:", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -357,9 +437,7 @@ export const getInterviewById = async (req, res) => {
 
 export const getMyInterviews = async (req, res) => {
   try {
-    // BUG FIX: was filtering `type: "instance"` which excluded published interviews
-    // (makeInterviewPublic sets type → "template", making them disappear from dashboard)
-    // Solution: query by userId only — show ALL interviews the user created/took
+    
     const interviews = await Interview.find({
       userId: req.user.userId,
     }).sort({ createdAt: -1 });

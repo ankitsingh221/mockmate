@@ -16,6 +16,10 @@ import {
   Zap,
   Star,
   Flame,
+  Mic,
+  Keyboard,
+  Briefcase,
+  ChevronRight,
 } from "lucide-react";
 import { formatDate, formatDuration } from "../utils/timeFormat";
 
@@ -52,6 +56,10 @@ export default function Marketplace() {
   const [difficulty, setDifficulty] = useState("all");
   const [experience, setExperience] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Mode selection modal state
+  const [showModeModal, setShowModeModal] = useState(false);
+  const [selectedInterview, setSelectedInterview] = useState(null);
 
   const hasShownToast = useRef(false);
 
@@ -88,45 +96,50 @@ export default function Marketplace() {
     fetchInterviews();
   }, []);
 
-  const handleTake = async (interview) => {
-    const roleName =
-      interview.role || interview.jobRole || interview.title || "Interview";
+  // Handle take with mode selection
+  const handleTakeClick = (interview) => {
+    setSelectedInterview(interview);
+    setShowModeModal(true);
+  };
 
-    setTaking(interview._id);
+  // Handle mode selection and navigation
+  const handleModeSelect = async (mode) => {
+    if (!selectedInterview) return;
+    
+    setShowModeModal(false);
+    
+    const roleName = selectedInterview.role || selectedInterview.jobRole || selectedInterview.title || "Interview";
+    
+    setTaking(selectedInterview._id);
 
-    toast.promise(
-      (async () => {
-        const { data: cloned } = await api.post(
-          `/interviews/${interview._id}/take`,
-        );
-        const newId = cloned._id ?? cloned.interview?._id;
+    try {
+      // Clone the interview
+      const { data: cloned } = await api.post(
+        `/interviews/${selectedInterview._id}/take`
+      );
+      const newId = cloned._id ?? cloned.interview?._id;
 
-        if (!newId) {
-          throw new Error("Failed to create interview clone");
-        }
+      if (!newId) {
+        throw new Error("Failed to create interview clone");
+      }
 
-        await api.post(`/interviews/${newId}/start`);
-        await new Promise((resolve) => setTimeout(resolve, 500));
+      // Start the interview
+      await api.post(`/interviews/${newId}/start`);
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-        return { newId, roleName };
-      })(),
-      {
-        loading: `Cloning "${roleName}" interview...`,
-        success: (result) => {
-          setTimeout(() => {
-            navigate(`/interview/${result.newId}/room`);
-          }, 500);
-          return `"${roleName}" interview ready! 🚀`;
-        },
-        error: (err) => {
-          console.error(err);
-          return err.response?.data?.message || "Failed to start interview";
-        },
-        finally: () => {
-          setTaking(null);
-        },
-      },
-    );
+      toast.success(`"${roleName}" interview ready! 🚀`);
+      
+      // Navigate based on selected mode
+      if (mode === "voice") {
+        navigate(`/interview/${newId}/voice`);
+      } else {
+        navigate(`/interview/${newId}/room`);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to start interview");
+      setTaking(null);
+    }
   };
 
   const filtered = interviews.filter((iv) => {
@@ -385,11 +398,97 @@ export default function Marketplace() {
                 key={iv._id}
                 interview={iv}
                 taking={taking === iv._id}
-                onTake={() => handleTake(iv)}
+                onTake={() => handleTakeClick(iv)}
               />
             ))}
           </div>
         )}
+      </div>
+
+      {/* Mode Selection Modal */}
+      {showModeModal && (
+        <ModeSelectionModal
+          interview={selectedInterview}
+          onClose={() => setShowModeModal(false)}
+          onSelectMode={handleModeSelect}
+        />
+      )}
+    </div>
+  );
+}
+
+// Mode Selection Modal Component
+function ModeSelectionModal({ interview, onClose, onSelectMode }) {
+  const displayRole = interview?.role || interview?.jobRole || interview?.title || "Interview";
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div 
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+        onClick={onClose} 
+      />
+      <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/[0.09] bg-[#111]/95 backdrop-blur-xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <div className="w-12 h-12 rounded-xl bg-red-600/20 border border-red-500/30 flex items-center justify-center mx-auto mb-3">
+            <Briefcase className="w-6 h-6 text-red-400" />
+          </div>
+          <h2 className="text-lg font-semibold text-white mb-1">
+            Choose interview mode
+          </h2>
+          <p className="text-sm text-white/40">
+            {displayRole} • {interview?.difficulty || "Medium"} • {interview?.duration || "15"} min
+          </p>
+        </div>
+
+        {/* Mode options */}
+        <div className="space-y-3 mb-6">
+          {/* Text Mode */}
+          <button
+            onClick={() => onSelectMode("text")}
+            className="w-full flex items-center gap-4 p-4 rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:border-red-500/30 transition-all group"
+          >
+            <div className="w-10 h-10 rounded-lg bg-white/[0.05] group-hover:bg-red-600/20 flex items-center justify-center transition-colors">
+              <Keyboard className="w-5 h-5 text-white/60 group-hover:text-red-400 transition-colors" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-semibold text-sm text-white/90 group-hover:text-white">Text Mode</p>
+              <p className="text-xs text-white/40 mt-0.5">Type your answers to AI questions</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-red-400 transition-colors" />
+          </button>
+
+          {/* Voice Mode */}
+          <button
+            onClick={() => onSelectMode("voice")}
+            className="w-full flex items-center gap-4 p-4 rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:border-red-500/30 transition-all group"
+          >
+            <div className="w-10 h-10 rounded-lg bg-white/[0.05] group-hover:bg-red-600/20 flex items-center justify-center transition-colors">
+              <Mic className="w-5 h-5 text-white/60 group-hover:text-red-400 transition-colors" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-semibold text-sm text-white/90 group-hover:text-white">Voice Mode</p>
+              <p className="text-xs text-white/40 mt-0.5">Speak naturally with AI interviewer</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-red-400 transition-colors" />
+          </button>
+        </div>
+
+        {/* Info note */}
+        <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+          <p className="text-xs text-white/30 text-center leading-relaxed">
+            💡 Voice mode requires microphone access. Text mode works in any browser.
+            You can switch modes during the interview setup.
+          </p>
+        </div>
+
+        {/* Cancel button */}
+        <button
+          onClick={onClose}
+          className="w-full mt-4 py-2.5 rounded-lg text-sm text-white/50 hover:text-white/70 hover:bg-white/[0.05] transition-colors"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );

@@ -14,6 +14,18 @@ const interviewSchema = new mongoose.Schema(
       default: "instance",
     },
 
+    mode: {
+      type: String,
+      enum: ["text", "voice"],
+      default: "text",
+    },
+
+    personality: {
+      type: String,
+      enum: ["friendly", "aggressive", "formal", "rapid"],
+      default: "friendly",
+    },
+
     isPublic: {
       type: Boolean,
       default: false,

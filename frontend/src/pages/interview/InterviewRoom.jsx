@@ -4,13 +4,7 @@ import api from "../../api/axios";
 import { useInterview } from "../../hooks/useInterview";
 import { useTimer } from "../../hooks/useTimer";
 import { formatTimer } from "../../utils/timeFormat";
-import {
-  Clock,
-  Send,
-  ChevronRight,
-  AlertTriangle,
-  Flag,
-} from "lucide-react";
+import { Clock, Send, ChevronRight, AlertTriangle, Flag } from "lucide-react";
 import { toast } from "sonner";
 
 const DEFAULT_Q_SECONDS = 120;
@@ -29,49 +23,45 @@ export default function InterviewRoom() {
   const [ending,        setEnding]        = useState(false);
   const textareaRef = useRef(null);
 
-  //  On mount: load interview state
+  // keep answer in a ref so callbacks never go stale
+  const answerRef = useRef("");
+  useEffect(() => { answerRef.current = answer; }, [answer]);
+
+  //  Load interview on mount 
   useEffect(() => {
     (async () => {
       try {
         const { data } = await api.get(`/interviews/${id}`);
-        const interview = data.interview;
+
+        //  your backend wraps in { success, data: { interview } } OR returns interview directly
+        const interview = data.data?.interview ?? data.interview ?? data.data ?? data;
 
         if (!interview) {
-          toast.error("Interview not found", {
-            description: "Redirecting to dashboard...",
-          });
+          toast.error("Interview not found", { description: "Redirecting to dashboard…" });
           navigate("/dashboard");
           return;
         }
 
         if (interview.status === "completed") {
-          toast.info("This interview is already completed", {
-            description: "Viewing your report",
-          });
+          toast.info("Interview already completed");
           navigate(`/interview/${id}/report`, { replace: true });
           return;
         }
 
         if (interview.status !== "in-progress") {
-          toast.warning("Interview not available", {
-            description: "Please start a new interview",
-          });
+          toast.warning("Interview not active", { description: "Please start a new interview" });
           navigate("/dashboard");
           return;
         }
 
-        const question = interview.currentQuestion;
-
-        if (!question) {
-          toast.error("No questions available", {
-            description: "There might be an issue with this interview",
-          });
+        if (!interview.currentQuestion) {
+          toast.error("No questions found");
           navigate("/dashboard");
           return;
         }
 
         loadQuestion({
-          question:    question,
+          question:    interview.currentQuestion,
           roundNumber: (interview.currentRound ?? 0) + 1,
           totalRounds: interview.maxRounds ?? 5,
           timeLimit:   DEFAULT_Q_SECONDS,
@@ -82,27 +72,23 @@ export default function InterviewRoom() {
           duration: 3000,
           icon: "🎯",
         });
-      } catch (error) {
-        console.error(error);
+      } catch (err) {
         toast.error("Failed to load interview", {
-          description: error.response?.data?.message || "Please try again",
+          description: err.response?.data?.message ?? "Please try again",
         });
         navigate("/dashboard");
       }
     })();
-  }, [id, navigate]);
+  }, [id]); 
 
   // Timer
   const questionSeconds = state.question?.timeLimit ?? DEFAULT_Q_SECONDS;
 
+  // use ref so callback is never stale
   const handleTimerExpire = useCallback(() => {
-    toast.warning("Time's up!", {
-      description: "Your answer will be submitted automatically",
-      duration: 3000,
-      icon: "⏰",
-    });
-    handleSubmit(true);
-  }, [answer]);
+    toast.warning("Time's up!", { description: "Submitting your answer…", icon: "⏰" });
+    handleSubmitRef.current(true);
+  }, []);
 
   const { timeLeft, pct: timerPct, start: startTimer, reset: resetTimer } =
     useTimer(questionSeconds, handleTimerExpire);
@@ -110,64 +96,50 @@ export default function InterviewRoom() {
   useEffect(() => {
     if (state.phase === "question") {
       setAnswer("");
+      answerRef.current = "";
       setCharCount(0);
       resetTimer(questionSeconds);
       startTimer();
       setTimeout(() => textareaRef.current?.focus(), 100);
-      
-      // Show reminder toast for first question
+
       if (state.roundNumber === 1) {
         toast.info("Pro tip 💡", {
-          description: "Use Ctrl+Enter to submit your answer quickly",
+          description: "Use Ctrl+Enter to submit quickly",
           duration: 5000,
-          icon: "⌨️",
         });
       }
     }
   }, [state.phase, state.roundNumber]);
 
-  //  Answer change
+  // Answer change 
   const handleAnswerChange = (e) => {
-    const newAnswer = e.target.value;
-    setAnswer(newAnswer);
-    setCharCount(newAnswer.length);
-    
-    // Auto-save reminder when approaching character limit
-    if (newAnswer.length === 1900) {
-      toast.warning("Approaching character limit", {
-        description: "You have 100 characters remaining",
-        duration: 3000,
-        icon: "⚠️",
-      });
+    const val = e.target.value;
+    setAnswer(val);
+    setCharCount(val.length);
+    if (val.length === 1900) {
+      toast.warning("Approaching limit", { description: "100 characters remaining", icon: "⚠️" });
     }
   };
 
-  //  Submit answer
+  // use a ref so timer expire callback always calls latest version
+  const handleSubmitRef = useRef(null);
+
   const handleSubmit = useCallback(async (timedOut = false) => {
     if (state.phase !== "question" && !timedOut) return;
 
-    const answerText = answer.trim() || "(No answer provided)";
-    
-    if (!timedOut && answerText === "(No answer provided)") {
-      toast.warning("Empty answer", {
-        description: "Please provide an answer before submitting",
-        duration: 3000,
-      });
+    const text = answerRef.current.trim() || "(No answer provided)";
+
+    if (!timedOut && text === "(No answer provided)") {
+      toast.warning("Please write an answer before submitting.");
       return;
     }
 
-    const submitToastId = toast.loading("Evaluating your answer...", {
-      description: "AI is analyzing your response",
-    });
+    const toastId = toast.loading("Evaluating your answer…");
 
     try {
-      const result = await submitAnswer(answerText);
+      const result = await submitAnswer(text);
 
-      toast.success("Answer submitted!", {
-        id: submitToastId,
-        description: "Getting feedback from AI",
-        duration: 2000,
-      });
+      toast.success("Answer submitted!", { id: toastId, duration: 2000 });
 
       let countdown = 4;
       setFeedbackTimer(countdown);
@@ -181,151 +153,106 @@ export default function InterviewRoom() {
           setFeedbackTimer(null);
 
           if (result.isCompleted) {
-            toast.success("Interview completed! 🎉", {
-              description: "Generating your comprehensive report...",
+            toast.success("Interview complete! 🎉", {
+              description: "Generating your report…",
               duration: 4000,
             });
             markDone();
             setTimeout(() => navigate(`/interview/${id}/report`), 600);
           } else if (result.nextQuestion) {
-            toast.info(`Moving to question ${result.currentRound + 2}`, {
-              description: "Get ready for the next challenge",
-              duration: 2000,
-              icon: "➡️",
-            });
             advanceToNext({
               question:    result.nextQuestion,
-              roundNumber: result.currentRound + 1,
+              roundNumber: (result.currentRound ?? state.roundNumber),
               totalRounds: result.maxRounds ?? state.totalRounds,
               timeLimit:   DEFAULT_Q_SECONDS,
             });
           }
         }
       }, 1000);
-    } catch (error) {
+    } catch (err) {
       toast.error("Submission failed", {
-        id: submitToastId,
-        description: error.response?.data?.message || "Please try again",
-        duration: 4000,
+        id: toastId,
+        description: err.response?.data?.message ?? "Please try again",
       });
     }
-  }, [state.phase, state.roundNumber, state.totalRounds, answer, id, navigate]);
+  }, [state.phase, state.roundNumber, state.totalRounds, id, navigate, submitAnswer, advanceToNext, markDone]);
 
-  // End early 
+  // keep ref in sync
+  useEffect(() => { handleSubmitRef.current = handleSubmit; }, [handleSubmit]);
+
+  //  End early
   const handleOpenEndModal = () => {
-    const hasAnswered = state?.evaluation || state?.roundNumber > 1;
-
-    if (!hasAnswered) {
-      toast.warning("Cannot end interview yet", {
-        description: "Please answer at least one question before ending",
-        duration: 4000,
-        icon: "⚠️",
-        action: {
-          label: "Continue",
-          onClick: () => textareaRef.current?.focus(),
-        },
-      });
+    if (state.roundNumber <= 1 && !state.evaluation) {
+      toast.warning("Answer at least one question before ending.", { duration: 3000 });
       return;
     }
-
     setEndModal(true);
   };
 
   const handleEndEarly = async () => {
     setEnding(true);
-    const endToastId = toast.loading("Ending interview...", {
-      description: "Saving your progress",
-    });
-
+    const toastId = toast.loading("Ending interview…");
     try {
       await endInterview();
-
-      toast.success("Interview ended successfully", {
-        id: endToastId,
-        description: "Your partial report is ready",
-        duration: 4000,
-        icon: "📊",
-      });
-
+      toast.success("Interview ended", { id: toastId, description: "Report is ready", icon: "📊" });
       navigate(`/interview/${id}/report`);
-    } catch (error) {
-      toast.error("Failed to end interview", {
-        id: endToastId,
-        description: error?.response?.data?.message || "Please try again",
-        duration: 4000,
+    } catch (err) {
+      toast.error("Failed to end", {
+        id: toastId,
+        description: err?.response?.data?.message ?? "Please try again",
       });
       setEnding(false);
       setEndModal(false);
     }
   };
 
-  //  Keyboard shortcut 
+  // Keyboard shortcut
   const handleKeyDown = (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       if (state.phase === "question" && answer.trim().length > 0) {
         handleSubmit();
-      } else if (state.phase === "question" && answer.trim().length === 0) {
-        toast.info("Write your answer first", {
-          description: "Type your response then press Ctrl+Enter to submit",
-          duration: 2000,
-        });
       }
     }
   };
 
-  //  Save warning before leaving 
+  // Leave warning 
   useEffect(() => {
-    const handleBeforeUnload = (e) => {
+    const handler = (e) => {
       if (state.phase === "question" && answer.trim().length > 0) {
         e.preventDefault();
-        e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
-        return e.returnValue;
+        e.returnValue = "";
       }
     };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
   }, [state.phase, answer]);
 
-  // Timer colours
-  const timerColour =
-    timerPct > 50 ? "text-white/70"
-    : timerPct > 25 ? "text-amber-400"
-    : "text-red-400";
+  // ── Timer colours ─────────────────────────────────────────────────────────
+  const timerColour  = timerPct > 50 ? "text-white/70" : timerPct > 25 ? "text-amber-400" : "text-red-400";
+  const ringColour   = timerPct > 50 ? "stroke-white/20" : timerPct > 25 ? "stroke-amber-500/60" : "stroke-red-500/80";
 
-  const ringColour =
-    timerPct > 50 ? "stroke-white/20"
-    : timerPct > 25 ? "stroke-amber-500/60"
-    : "stroke-red-500/80";
-
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#080808] text-white flex flex-col">
 
-      {/* Ambient glows */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-red-600/8 blur-[140px]" />
         <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-red-900/6 blur-[100px]" />
       </div>
 
-      {/*Top bar  */}
+      {/* Header */}
       <header className="relative z-20 sticky top-0 border-b border-white/[0.06] backdrop-blur-xl bg-black/50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
 
-          {/* Round progress pills */}
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-1.5">
               {Array.from({ length: state.totalRounds || 5 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={`h-1.5 rounded-full transition-all duration-500 ${
-                    i < state.roundNumber - 1
-                      ? "w-6 bg-red-500"
-                      : i === state.roundNumber - 1
-                      ? "w-6 bg-red-400 animate-pulse"
-                      : "w-6 bg-white/10"
-                  }`}
-                />
+                <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${
+                  i < state.roundNumber - 1 ? "w-6 bg-red-500"
+                  : i === state.roundNumber - 1 ? "w-6 bg-red-400 animate-pulse"
+                  : "w-6 bg-white/10"
+                }`} />
               ))}
             </div>
             <span className="text-xs text-white/40">
@@ -334,17 +261,10 @@ export default function InterviewRoom() {
             </span>
           </div>
 
-          {/* Timer */}
           {state.phase === "question" && (
-            <TimerRing
-              timeLeft={timeLeft}
-              pct={timerPct}
-              colour={timerColour}
-              ringColour={ringColour}
-            />
+            <TimerRing timeLeft={timeLeft} pct={timerPct} colour={timerColour} ringColour={ringColour} />
           )}
 
-          {/* End early */}
           <button
             onClick={handleOpenEndModal}
             className="flex items-center gap-1.5 text-xs text-white/30 hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10 border border-transparent hover:border-red-500/20"
@@ -355,7 +275,7 @@ export default function InterviewRoom() {
         </div>
       </header>
 
-      {/* Main  */}
+      {/* Main */}
       <main className="relative z-10 flex-1 flex flex-col max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 gap-6">
 
         {state.phase === "loading" && (
@@ -369,10 +289,7 @@ export default function InterviewRoom() {
             <div className="text-center space-y-3">
               <AlertTriangle className="w-10 h-10 text-red-400 mx-auto" />
               <p className="text-white/50 text-sm">{state.error}</p>
-              <button
-                onClick={() => navigate("/dashboard")}
-                className="text-sm text-red-400 underline"
-              >
+              <button onClick={() => navigate("/dashboard")} className="text-sm text-red-400 underline">
                 Back to dashboard
               </button>
             </div>
@@ -390,7 +307,6 @@ export default function InterviewRoom() {
             {/* Question card */}
             <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-md p-6 sm:p-8 relative overflow-hidden">
               <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
-
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-[10px] uppercase tracking-widest text-red-400/70 font-medium">
                   Question {state.roundNumber}
@@ -399,7 +315,6 @@ export default function InterviewRoom() {
                   <Clock className="w-3 h-3" /> {formatTimer(DEFAULT_Q_SECONDS)} limit
                 </span>
               </div>
-
               <p className="text-white text-lg sm:text-xl leading-relaxed font-medium">
                 {typeof state.question === "string"
                   ? state.question
@@ -407,7 +322,7 @@ export default function InterviewRoom() {
               </p>
             </div>
 
-            {/* Answer area */}
+            {/* Answer */}
             <div className="flex-1 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs text-white/35 uppercase tracking-wider">Your answer</label>
@@ -454,7 +369,7 @@ export default function InterviewRoom() {
               </div>
             </div>
 
-            {/* Feedback panel */}
+            {/* Feedback */}
             {state.phase === "feedback" && state.evaluation && (
               <FeedbackPanel
                 evaluation={state.evaluation}
@@ -467,20 +382,17 @@ export default function InterviewRoom() {
         )}
       </main>
 
-      {/* End early modal */}
+      {/* End modal */}
       {endModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => setEndModal(false)}
-          />
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEndModal(false)} />
           <div className="relative z-10 w-full max-w-sm rounded-2xl border border-white/[0.09] bg-[#111] backdrop-blur-xl p-6 shadow-2xl">
             <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4">
               <Flag className="w-5 h-5 text-red-400" />
             </div>
             <h2 className="text-base font-semibold mb-1">End interview early?</h2>
             <p className="text-sm text-white/40 mb-6">
-              Your progress will be saved and a partial report will be generated from answers so far.
+              Your progress will be saved and a partial report will be generated.
             </p>
             <div className="flex gap-3">
               <button
@@ -504,23 +416,11 @@ export default function InterviewRoom() {
   );
 }
 
-//  Circular timer ring 
+//  Timer ring
 function TimerRing({ timeLeft, pct, colour, ringColour }) {
-  // Show warning toast when time is running low
   useEffect(() => {
-    if (timeLeft === 30) {
-      toast.warning("30 seconds remaining!", {
-        description: "Submit your answer soon",
-        duration: 3000,
-        icon: "⏱️",
-      });
-    } else if (timeLeft === 10) {
-      toast.warning("10 seconds left!", {
-        description: "Final chance to review your answer",
-        duration: 3000,
-        icon: "⚠️",
-      });
-    }
+    if (timeLeft === 30) toast.warning("30 seconds remaining!", { icon: "⏱️", duration: 3000 });
+    if (timeLeft === 10) toast.warning("10 seconds left!", { icon: "⚠️", duration: 3000 });
   }, [timeLeft]);
 
   const r       = 18;
@@ -549,45 +449,25 @@ function TimerRing({ timeLeft, pct, colour, ringColour }) {
   );
 }
 
-//Feedback panel
+// Feedback panel
 function FeedbackPanel({ evaluation, feedbackTimer, roundNumber, totalRounds }) {
   const score  = evaluation?.overallScore ?? evaluation?.score ?? null;
   const isLast = roundNumber >= totalRounds;
 
-  const scoreColour =
-    score >= 8 ? "text-emerald-400"
-    : score >= 5 ? "text-amber-400"
-    : "text-red-400";
+  const scoreColour = score >= 8 ? "text-emerald-400" : score >= 5 ? "text-amber-400" : "text-red-400";
+  const scoreBg     = score >= 8 ? "bg-emerald-500/10 border-emerald-500/20"
+                    : score >= 5 ? "bg-amber-500/10   border-amber-500/20"
+                    : "bg-red-500/10 border-red-500/20";
 
-  const scoreBg =
-    score >= 8 ? "bg-emerald-500/10 border-emerald-500/20"
-    : score >= 5 ? "bg-amber-500/10 border-amber-500/20"
-    : "bg-red-500/10 border-red-500/20";
-
-  // Show toast for score achievement
+  //  score toast only fires once per evaluation
+  const firedRef = useRef(false);
   useEffect(() => {
-    if (score !== null) {
-      if (score >= 9) {
-        toast.success("Excellent answer! 🌟", {
-          description: `You scored ${score}/10 - Outstanding performance!`,
-          duration: 3000,
-        });
-      } else if (score >= 7) {
-        toast.success("Great answer! 👍", {
-          description: `You scored ${score}/10 - Well done!`,
-          duration: 3000,
-        });
-      } else if (score >= 5) {
-        toast.info("Good attempt 💪", {
-          description: `You scored ${score}/10 - Keep improving!`,
-          duration: 3000,
-        });
-      } else {
-        toast.warning("Room for improvement 📚", {
-          description: `You scored ${score}/10 - Review the feedback carefully`,
-          duration: 4000,
-        });
-      }
+    if (score !== null && !firedRef.current) {
+      firedRef.current = true;
+      if      (score >= 9) toast.success(`Excellent! 🌟 ${score}/10`);
+      else if (score >= 7) toast.success(`Great answer 👍 ${score}/10`);
+      else if (score >= 5) toast.info(`Good attempt 💪 ${score}/10`);
+      else                 toast.warning(`Review the feedback 📚 ${score}/10`);
     }
   }, [score]);
 
@@ -607,12 +487,11 @@ function FeedbackPanel({ evaluation, feedbackTimer, roundNumber, totalRounds }) 
           <p className="text-sm text-white/70 leading-relaxed">{evaluation.feedback}</p>
         )}
 
-        {/* Score breakdown */}
         {[
           { label: "Technical",     value: evaluation.technicalScore },
           { label: "Communication", value: evaluation.communicationScore },
           { label: "Correctness",   value: evaluation.correctnessScore },
-        ].filter(s => s.value != null).map(({ label, value }) => (
+        ].filter((s) => s.value != null).map(({ label, value }) => (
           <div key={label} className="flex items-center justify-between">
             <span className="text-xs text-white/35">{label}</span>
             <div className="flex items-center gap-2">
@@ -636,12 +515,7 @@ function FeedbackPanel({ evaluation, feedbackTimer, roundNumber, totalRounds }) 
           <div className="flex items-center gap-1.5">
             <div className="flex gap-0.5">
               {[3, 2, 1, 0].map((v) => (
-                <div
-                  key={v}
-                  className={`w-1.5 h-1.5 rounded-full transition-all ${
-                    feedbackTimer > v ? "bg-red-500" : "bg-white/10"
-                  }`}
-                />
+                <div key={v} className={`w-1.5 h-1.5 rounded-full transition-all ${feedbackTimer > v ? "bg-red-500" : "bg-white/10"}`} />
               ))}
             </div>
             <span className="text-xs text-white/30">{feedbackTimer}s</span>
@@ -655,7 +529,6 @@ function FeedbackPanel({ evaluation, feedbackTimer, roundNumber, totalRounds }) 
   );
 }
 
-//Spinner
 function Spinner({ label }) {
   return (
     <div className="flex flex-col items-center gap-3 text-white/30">

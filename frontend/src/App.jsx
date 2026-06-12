@@ -16,8 +16,8 @@ import Marketplace from "./pages/Marketplace";
 import CreateInterview from "./pages/interview/CreateInterview";
 import InterviewRoom from "./pages/interview/InterviewRoom";
 import InterviewReport from "./pages/interview/InterviewReport";
+import VoiceInterviewRoom from "./pages/interview/VoiceInterviewRoom"; // ← FIX 1: wrong path alias
 
-// Shows Navbar only on authenticated/inner pages
 function AppLayout({ children }) {
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
@@ -32,7 +32,6 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      {/* Global toast — renders above everything */}
       <Toaster
         position="top-right"
         expand={false}
@@ -50,27 +49,14 @@ export default function App() {
             borderRadius: "12px",
             boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
           },
-          // Class names for custom styling
           className: "my-toast",
-          // Success specific styles
           success: {
-            style: {
-              border: "1px solid rgba(34,197,94,0.3)",
-            },
-            iconTheme: {
-              primary: "#22c55e",
-              secondary: "#fff",
-            },
+            style: { border: "1px solid rgba(34,197,94,0.3)" },
+            iconTheme: { primary: "#22c55e", secondary: "#fff" },
           },
-          // Error specific styles
           error: {
-            style: {
-              border: "1px solid rgba(239,68,68,0.3)",
-            },
-            iconTheme: {
-              primary: "#ef4444",
-              secondary: "#fff",
-            },
+            style: { border: "1px solid rgba(239,68,68,0.3)" },
+            iconTheme: { primary: "#ef4444", secondary: "#fff" },
           },
         }}
       />
@@ -91,7 +77,7 @@ export default function App() {
           }
         />
 
-        {/* Protected — Navbar included via AppLayout */}
+        {/* Protected — Navbar via AppLayout */}
         <Route element={<ProtectedRoute />}>
           <Route
             path="/dashboard"
@@ -125,6 +111,17 @@ export default function App() {
               </AppLayout>
             }
           />
+
+          {/* FIX 2: was "/interview':id/voice" — missing / and colon was wrong */}
+          <Route
+            path="/interview/:id/voice"
+            element={
+              <AppLayout>
+                <VoiceInterviewRoom />
+              </AppLayout>
+            }
+          />
+
           <Route
             path="/interview/:id/report"
             element={

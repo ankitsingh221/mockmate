@@ -12,6 +12,8 @@ import {
   Clock,
   ChevronRight,
   Layers,
+  Mic,
+  Keyboard,
 } from "lucide-react";
 import { formatDate } from "../utils/timeFormat";
 
@@ -41,7 +43,6 @@ const storage = {
       const deleted = storage.getDeleted();
       if (!deleted.includes(id)) {
         deleted.push(id);
-        // Keep only last 50 to prevent unlimited growth
         if (deleted.length > 50) deleted.shift();
         localStorage.setItem('deletedInterviews', JSON.stringify(deleted));
       }
@@ -64,13 +65,16 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  
+  // Mode selection modal state
+  const [showModeModal, setShowModeModal] = useState(false);
+  const [selectedInterview, setSelectedInterview] = useState(null);
 
   const fetchInterviews = useCallback(async () => {
     try {
       const { data } = await api.get("/interviews/my");
       let interviewList = Array.isArray(data) ? data : data.interviews ?? [];
       
-      // Filter out locally deleted interviews
       const deletedInterviews = storage.getDeleted();
       interviewList = interviewList.filter(interview => !deletedInterviews.includes(interview._id));
       
@@ -123,13 +127,10 @@ export default function Dashboard() {
                     toast.dismiss(t);
                     setDeletingId(interviewId);
                     
-                    // Optimistic update
                     setInterviews(prev => prev.filter(i => i._id !== interviewId));
                     
                     try {
                       const response = await api.delete(`/interviews/${interviewId}`);
-                      
-                      // Cache the deletion
                       storage.addDeleted(interviewId);
                       
                       if (response.data?.deletedFromDB === false) {
@@ -141,7 +142,6 @@ export default function Dashboard() {
                         toast.success("Interview deleted successfully");
                       }
                     } catch (err) {
-                      // Rollback on error
                       await fetchInterviews();
                       toast.error(err.response?.data?.message || "Failed to delete interview");
                     } finally {
@@ -160,6 +160,25 @@ export default function Dashboard() {
       );
     }, { duration: 5000 });
   }, [deletingId, fetchInterviews]);
+
+  // Handle resume with mode selection
+  const handleResumeClick = (interview) => {
+    setSelectedInterview(interview);
+    setShowModeModal(true);
+  };
+
+  // Handle mode selection and navigation
+  const handleModeSelect = (mode) => {
+    if (!selectedInterview) return;
+    
+    setShowModeModal(false);
+    
+    if (mode === "voice") {
+      navigate(`/interview/${selectedInterview._id}/voice`);
+    } else {
+      navigate(`/interview/${selectedInterview._id}/room`);
+    }
+  };
 
   const completed = interviews.filter((i) => i.status === "completed");
   const inProgress = interviews.filter((i) => i.status === "in-progress");
@@ -244,13 +263,97 @@ export default function Dashboard() {
                 key={interview._id}
                 interview={interview}
                 onOpen={() => navigate(`/interview/${interview._id}/report`)}
-                onResume={() => navigate(`/interview/${interview._id}/room`)}
+                onResume={() => handleResumeClick(interview)}
                 onDelete={() => handleDelete(interview._id, interview.role || "Untitled", interview.type === "template")}
                 isDeleting={deletingId === interview._id}
               />
             ))}
           </div>
         )}
+      </div>
+
+      {/* Mode Selection Modal */}
+      {showModeModal && (
+        <ModeSelectionModal
+          interview={selectedInterview}
+          onClose={() => setShowModeModal(false)}
+          onSelectMode={handleModeSelect}
+        />
+      )}
+    </div>
+  );
+}
+
+// Mode Selection Modal Component
+function ModeSelectionModal({ interview, onClose, onSelectMode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div 
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+        onClick={onClose} 
+      />
+      <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/[0.09] bg-[#111]/95 backdrop-blur-xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <div className="w-12 h-12 rounded-xl bg-red-600/20 border border-red-500/30 flex items-center justify-center mx-auto mb-3">
+            <Briefcase className="w-6 h-6 text-red-400" />
+          </div>
+          <h2 className="text-lg font-semibold text-white mb-1">
+            Choose interview mode
+          </h2>
+          <p className="text-sm text-white/40">
+            {interview?.role || "Interview"} • {interview?.difficulty || "Medium"} • {interview?.duration || "15"} min
+          </p>
+        </div>
+
+        {/* Mode options */}
+        <div className="space-y-3 mb-6">
+          {/* Text Mode */}
+          <button
+            onClick={() => onSelectMode("text")}
+            className="w-full flex items-center gap-4 p-4 rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:border-red-500/30 transition-all group"
+          >
+            <div className="w-10 h-10 rounded-lg bg-white/[0.05] group-hover:bg-red-600/20 flex items-center justify-center transition-colors">
+              <Keyboard className="w-5 h-5 text-white/60 group-hover:text-red-400 transition-colors" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-semibold text-sm text-white/90 group-hover:text-white">Text Mode</p>
+              <p className="text-xs text-white/40 mt-0.5">Type your answers to AI questions</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-red-400 transition-colors" />
+          </button>
+
+          {/* Voice Mode */}
+          <button
+            onClick={() => onSelectMode("voice")}
+            className="w-full flex items-center gap-4 p-4 rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:border-red-500/30 transition-all group"
+          >
+            <div className="w-10 h-10 rounded-lg bg-white/[0.05] group-hover:bg-red-600/20 flex items-center justify-center transition-colors">
+              <Mic className="w-5 h-5 text-white/60 group-hover:text-red-400 transition-colors" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-semibold text-sm text-white/90 group-hover:text-white">Voice Mode</p>
+              <p className="text-xs text-white/40 mt-0.5">Speak naturally with AI interviewer</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-red-400 transition-colors" />
+          </button>
+        </div>
+
+        {/* Info note */}
+        <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+          <p className="text-xs text-white/30 text-center leading-relaxed">
+            💡 Voice mode requires microphone access. Text mode works in any browser.
+            You can switch modes during the interview setup.
+          </p>
+        </div>
+
+        {/* Cancel button */}
+        <button
+          onClick={onClose}
+          className="w-full mt-4 py-2.5 rounded-lg text-sm text-white/50 hover:text-white/70 hover:bg-white/[0.05] transition-colors"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );
@@ -409,7 +512,7 @@ function EmptyState({ onNew }) {
       </p>
       <button
         onClick={onNew}
-        className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-rose-900/80 hover:bg-rose-800/80 text-whitetext-sm font-medium transition-colors shadow-lg shadow-red-900/30"
+        className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-rose-900/80 hover:bg-rose-800/80 text-white text-sm font-medium transition-colors shadow-lg shadow-red-900/30"
       >
         <Plus className="w-4 h-4" />
         Create your first interview

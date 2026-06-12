@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/axios";
+import { toast } from "sonner";
 import {
   Briefcase,
   BarChart2,
@@ -11,15 +12,16 @@ import {
   Flame,
   Layers,
   Star,
+  Mic,
+  Keyboard, // ← Added missing import
 } from "lucide-react";
 
-
 const EXPERIENCE_OPTIONS = [
-  { value: "intern",       label: "Intern",       sub: "0–1 year"  },
-  { value: "junior",       label: "Junior",       sub: "1–3 years" },
-  { value: "mid-level",    label: "Mid-level",    sub: "3–5 years" },
-  { value: "senior",       label: "Senior",       sub: "5–8 years" },
-  { value: "lead",         label: "Lead",         sub: "8+ years"  },
+  { value: "intern", label: "Intern", sub: "0–1 year" },
+  { value: "junior", label: "Junior", sub: "1–3 years" },
+  { value: "mid-level", label: "Mid-level", sub: "3–5 years" },
+  { value: "senior", label: "Senior", sub: "5–8 years" },
+  { value: "lead", label: "Lead", sub: "8+ years" },
 ];
 
 const DIFFICULTY_OPTIONS = [
@@ -50,36 +52,37 @@ const DIFFICULTY_OPTIONS = [
 ];
 
 const DURATION_OPTIONS = [
-  { value: 10,  label: "10 min", sub: "~2 questions"  },
-  { value: 20,  label: "20 min", sub: "~4 questions"  },
-  { value: 30,  label: "30 min", sub: "~6 questions"  },
-  { value: 45,  label: "45 min", sub: "~8 questions"  },
-  { value: 60,  label: "60 min", sub: "~10 questions" },
+  { value: 5, label: "5 min", sub: "~2 questions" },
+  { value: 10, label: "10 min", sub: "~4 questions" },
+  { value: 15, label: "15 min", sub: "~6 questions" },
+  { value: 20, label: "20 min", sub: "~8 questions" },
+  { value: 30, label: "30 min", sub: "~10 questions" },
 ];
 
-
 const STEPS = [
-  { id: 1, label: "Role",        icon: <Briefcase className="w-4 h-4" /> },
-  { id: 2, label: "Experience",  icon: <Layers    className="w-4 h-4" /> },
-  { id: 3, label: "Difficulty",  icon: <Zap       className="w-4 h-4" /> },
-  { id: 4, label: "Duration",    icon: <Clock     className="w-4 h-4" /> },
+  { id: 1, label: "Role", icon: <Briefcase className="w-4 h-4" /> },
+  { id: 2, label: "Experience", icon: <Layers className="w-4 h-4" /> },
+  { id: 3, label: "Difficulty", icon: <Zap className="w-4 h-4" /> },
+  { id: 4, label: "Duration", icon: <Clock className="w-4 h-4" /> },
+  { id: 5, label: "Mode", icon: <Mic className="w-4 h-4" /> },
 ];
 
 export default function CreateInterview() {
   const navigate = useNavigate();
 
-  const [step, setStep]           = useState(1);
+  const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError]         = useState(null);
+  const [error, setError] = useState(null);
 
- const [form, setForm] = useState({
-  jobRole: "",
-  experienceLevel: "",
-  difficulty: "",
-  duration: "",
-});
+  const [form, setForm] = useState({
+    jobRole: "",
+    experienceLevel: "",
+    difficulty: "",
+    duration: "",
+    mode: "text", // ← Set default mode
+  });
 
-  // Helpers 
+  // Helpers
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
   const canNext = () => {
@@ -87,48 +90,69 @@ export default function CreateInterview() {
     if (step === 2) return !!form.experienceLevel;
     if (step === 3) return !!form.difficulty;
     if (step === 4) return !!form.duration;
+    if (step === 5) return !!form.mode;
     return false;
   };
 
   const handleNext = () => {
-    if (step < 4) { setStep((s) => s + 1); return; }
+    if (step < 5) {
+      setStep((s) => s + 1);
+      return;
+    }
     handleSubmit();
   };
 
- const handleSubmit = async () => {
-  setSubmitting(true);
-  setError(null);
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setError(null);
 
-  try {
-    const { data: created } = await api.post("/interviews", {
-      role: form.jobRole.trim(),
-      experience: form.experienceLevel,
-      difficulty: form.difficulty,
-      duration: Number(form.duration),
-    });
+    try {
+      // 1. Create interview
+      const { data: created } = await api.post("/interviews", {
+        role: form.jobRole.trim(),
+        experience: form.experienceLevel,
+        difficulty: form.difficulty,
+        duration: Number(form.duration),
+        mode: form.mode,
+      });
 
-    const id = created.interview._id;
+      const interviewId = created.interview?._id || created._id;
+      
+      if (!interviewId) {
+        throw new Error("No interview ID returned from server");
+      }
 
-    await api.post(`/interviews/${id}/start`);
+      // 2. Start the interview
+      await api.post(`/interviews/${interviewId}/start`);
 
-    navigate(`/interview/${id}/room`);
-  } catch (err) {
-    console.error(err);
+      // 3. Show success toast
+      toast.success("Interview created! Starting...");
 
-    setError(
-      err.response?.data?.message ||
-      "Failed to create interview. Try again."
-    );
+      // 4. Navigate based on mode
+      if (form.mode === "voice") {
+        navigate(`/interview/${interviewId}/voice`);
+      } else {
+        navigate(`/interview/${interviewId}/room`);
+      }
+    } catch (err) {
+      console.error("Create interview error:", err);
 
-    setSubmitting(false);
-  }
-};
+      const errorMessage = 
+        err.response?.data?.message || 
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to create interview. Try again.";
+
+      setError(errorMessage);
+      toast.error(errorMessage);
+      setSubmitting(false);
+    }
+  };
 
   const progress = ((step - 1) / (STEPS.length - 1)) * 100;
 
   return (
     <div className="min-h-screen bg-[#080808] text-white flex flex-col">
-
       {/* Ambient glows */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-red-600/10 blur-[130px]" />
@@ -139,7 +163,9 @@ export default function CreateInterview() {
       <div className="relative z-10 border-b border-white/[0.06] backdrop-blur-xl bg-black/40 sticky top-0">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <button
-            onClick={() => step > 1 ? setStep((s) => s - 1) : navigate("/dashboard")}
+            onClick={() =>
+              step > 1 ? setStep((s) => s - 1) : navigate("/dashboard")
+            }
             className="flex items-center gap-1.5 text-sm text-white/40 hover:text-white/80 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -154,7 +180,7 @@ export default function CreateInterview() {
         <div className="h-[2px] bg-white/[0.05]">
           <div
             className="h-full bg-gradient-to-r from-red-700 to-red-500 transition-all duration-500 ease-out"
-            style={{ width: `${progress + 25}%` }}
+            style={{ width: `${progress}%` }} // ← Fixed progress calculation
           />
         </div>
       </div>
@@ -169,8 +195,8 @@ export default function CreateInterview() {
                 s.id === step
                   ? "bg-red-600/20 border-red-500/40 text-red-400"
                   : s.id < step
-                  ? "bg-white/[0.06] border-white/[0.1] text-white/50"
-                  : "bg-transparent border-white/[0.05] text-white/20"
+                    ? "bg-white/[0.06] border-white/[0.1] text-white/50"
+                    : "bg-transparent border-white/[0.05] text-white/20"
               }`}
             >
               {s.icon}
@@ -182,7 +208,6 @@ export default function CreateInterview() {
 
       {/* Form area*/}
       <div className="relative z-10 flex-1 flex flex-col max-w-2xl mx-auto w-full px-4 sm:px-6 py-8">
-
         {/*  1 Role */}
         {step === 1 && (
           <StepShell
@@ -196,7 +221,9 @@ export default function CreateInterview() {
                 type="text"
                 value={form.jobRole}
                 onChange={(e) => set("jobRole", e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && canNext() && handleNext()}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && canNext() && handleNext()
+                }
                 placeholder="e.g. Backend Engineer"
                 maxLength={80}
                 className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.04] border border-white/[0.09] text-white placeholder-white/25 text-sm focus:outline-none focus:border-red-500/50 focus:bg-white/[0.06] transition-all"
@@ -208,7 +235,9 @@ export default function CreateInterview() {
 
             {/* Suggested roles */}
             <div className="mt-4">
-              <p className="text-[11px] text-white/30 uppercase tracking-wider mb-2">Popular roles</p>
+              <p className="text-[11px] text-white/30 uppercase tracking-wider mb-2">
+                Popular roles
+              </p>
               <div className="flex flex-wrap gap-2">
                 {[
                   "Frontend Developer",
@@ -286,9 +315,13 @@ export default function CreateInterview() {
                       : "bg-white/[0.03] border-white/[0.07] text-white/60 hover:bg-white/[0.05] hover:border-white/15 hover:text-white/80"
                   }`}
                 >
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    form.difficulty === opt.value ? "bg-white/10" : "bg-white/[0.05]"
-                  }`}>
+                  <div
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      form.difficulty === opt.value
+                        ? "bg-white/10"
+                        : "bg-white/[0.05]"
+                    }`}
+                  >
                     {opt.icon}
                   </div>
                   <div className="flex-1">
@@ -296,7 +329,9 @@ export default function CreateInterview() {
                     <p className="text-xs opacity-60 mt-0.5">{opt.sub}</p>
                   </div>
                   {form.difficulty === opt.value && (
-                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${opt.dotClass}`} />
+                    <div
+                      className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${opt.dotClass}`}
+                    />
                   )}
                 </button>
               ))}
@@ -330,18 +365,94 @@ export default function CreateInterview() {
             {/* Summary card */}
             {form.duration && (
               <div className="mt-6 p-4 rounded-xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-md space-y-2">
-                <p className="text-xs text-white/35 uppercase tracking-wider mb-3">Interview summary</p>
+                <p className="text-xs text-white/35 uppercase tracking-wider mb-3">
+                  Interview summary
+                </p>
                 {[
-                  { label: "Role",        value: form.jobRole        },
-                  { label: "Experience",  value: form.experienceLevel },
-                  { label: "Difficulty",  value: form.difficulty      },
-                  { label: "Duration",    value: `${form.duration} min`},
+                  { label: "Role", value: form.jobRole },
+                  { label: "Experience", value: form.experienceLevel },
+                  { label: "Difficulty", value: form.difficulty },
+                  { label: "Duration", value: `${form.duration} min` },
                 ].map(({ label, value }) => (
-                  <div key={label} className="flex items-center justify-between">
+                  <div
+                    key={label}
+                    className="flex items-center justify-between"
+                  >
                     <span className="text-xs text-white/35">{label}</span>
-                    <span className="text-xs font-medium text-white/80 capitalize">{value}</span>
+                    <span className="text-xs font-medium text-white/80 capitalize">
+                      {value}
+                    </span>
                   </div>
                 ))}
+              </div>
+            )}
+          </StepShell>
+        )}
+
+        {/* mode */}
+        {step === 5 && (
+          <StepShell
+            title="How do you want to answer?"
+            sub="Choose text to type your answers, or voice for a real spoken interview"
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => set("mode", "text")}
+                className={`flex flex-col items-center gap-3 py-8 rounded-xl border transition-all ${
+                  form.mode === "text"
+                    ? "bg-red-600/15 border-red-500/50 text-white"
+                    : "bg-white/[0.03] border-white/[0.07] text-white/50 hover:bg-white/[0.05] hover:border-white/15"
+                }`}
+              >
+                <div
+                  className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    form.mode === "text" ? "bg-red-600/20" : "bg-white/[0.05]"
+                  }`}
+                >
+                  <Keyboard className="w-6 h-6" />
+                </div>
+                <div className="text-center">
+                  <p className="font-semibold text-sm">Text</p>
+                  <p className="text-xs opacity-50 mt-0.5">Type your answers</p>
+                </div>
+                {form.mode === "text" && (
+                  <div className="w-2 h-2 rounded-full bg-red-400" />
+                )}
+              </button>
+
+              <button
+                onClick={() => set("mode", "voice")}
+                className={`flex flex-col items-center gap-3 py-8 rounded-xl border transition-all ${
+                  form.mode === "voice"
+                    ? "bg-red-600/15 border-red-500/50 text-white"
+                    : "bg-white/[0.03] border-white/[0.07] text-white/50 hover:bg-white/[0.05] hover:border-white/15"
+                }`}
+              >
+                <div
+                  className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    form.mode === "voice" ? "bg-red-600/20" : "bg-white/[0.05]"
+                  }`}
+                >
+                  <Mic className="w-6 h-6" />
+                </div>
+                <div className="text-center">
+                  <p className="font-semibold text-sm">Voice</p>
+                  <p className="text-xs opacity-50 mt-0.5">Talk to the AI</p>
+                </div>
+                {form.mode === "voice" && (
+                  <div className="w-2 h-2 rounded-full bg-red-400" />
+                )}
+              </button>
+            </div>
+
+            {form.mode === "voice" && (
+              <div className="mt-4 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.07]">
+                <p className="text-xs text-white/40 leading-relaxed">
+                  🎙️ Voice mode uses AI to conduct a real spoken interview. The
+                  AI will ask questions, listen to your answers, say "hmm", "I
+                  see", and ask follow-ups — just like a real interviewer. Make
+                  sure your microphone is connected.
+                </p>
               </div>
             )}
           </StepShell>
@@ -360,23 +471,42 @@ export default function CreateInterview() {
             onClick={handleNext}
             disabled={!canNext() || submitting}
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all
-              bg-rose-900/80 hover:bg-rose-800/80 text-white
+              bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white
               disabled:opacity-30 disabled:cursor-not-allowed
               shadow-lg shadow-red-900/30
               active:scale-[0.98]"
           >
             {submitting ? (
               <>
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                <svg
+                  className="w-4 h-4 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                  />
                 </svg>
                 Starting interview…
               </>
-            ) : step < 4 ? (
-              <>Continue <ChevronRight className="w-4 h-4" /></>
+            ) : step < 5 ? (
+              <>
+                Continue <ChevronRight className="w-4 h-4" />
+              </>
             ) : (
-              <>Start Interview <Zap className="w-4 h-4" /></>
+              <>
+                Start Interview <Zap className="w-4 h-4" />
+              </>
             )}
           </button>
         </div>
@@ -384,7 +514,6 @@ export default function CreateInterview() {
     </div>
   );
 }
-
 
 function StepShell({ title, sub, children }) {
   return (
