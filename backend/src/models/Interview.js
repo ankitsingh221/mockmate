@@ -22,7 +22,7 @@ const interviewSchema = new mongoose.Schema(
 
     personality: {
       type: String,
-      enum: ["friendly", "aggressive", "formal", "rapid"],
+      enum: ["friendly", "aggressive", "formal", "Rapid Fire","Tough but Fair", "Mentor"],
       default: "friendly",
     },
 

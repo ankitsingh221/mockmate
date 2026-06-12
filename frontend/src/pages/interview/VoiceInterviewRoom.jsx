@@ -71,6 +71,7 @@ export default function VoiceInterviewRoom() {
       experience: interview.experience  ?? "mid-level",
       difficulty: interview.difficulty  ?? "medium",
       maxRounds:  interview.maxRounds   ?? 5,
+      personality: interview.personality ?? "friendly",
     });
     toast.success("Connecting to your AI interviewer…", { duration: 2000 });
   };
