@@ -48,14 +48,14 @@ export default function VoiceInterviewRoom() {
         setLoading(false);
       }
     })();
-  }, [id]);
+  }, [id, navigate]);
 
   // API errors
   useEffect(() => {
     if (error) toast.error(error);
   }, [error]);
 
-  //  When call ends (naturally or manually) → save + report 
+  // When call ends (naturally or manually) → save + report 
   useEffect(() => {
     if (status === "ended" && callStarted) {
       handleCallEnded();
@@ -76,15 +76,15 @@ export default function VoiceInterviewRoom() {
     toast.success("Connecting to your AI interviewer…", { duration: 2000 });
   };
 
-  //  End call manually
+  // End call manually
   const handleEndCall = () => {
     setEndModal(false);
-    endCall(); // triggers status → "ended" → useEffect calls handleCallEnded
+    endCall();
   };
 
-  // ── Save transcript + generate report ──────────────────────────────────────
+  // Save transcript + generate report
   const handleCallEnded = async () => {
-    if (saving) return; // prevent double-call
+    if (saving) return;
     setSaving(true);
 
     const currentTranscript = transcriptRef.current;
@@ -98,23 +98,17 @@ export default function VoiceInterviewRoom() {
         .map((t) => `${t.role === "assistant" ? "Interviewer" : "Candidate"}: ${t.text}`)
         .join("\n\n");
 
-      // Send to backend —> end endpoint should handle partial interviews too
+      // Send to backend
       await api.post(`/interviews/${id}/end`, {
-        // Send raw transcript array
         voiceTranscript: currentTranscript
           .filter((t) => !t.partial)
           .map((t) => ({ role: t.role, text: t.text })),
-
-        // Also send as formatted string — backend can use whichever it prefers
         conversationText,
-
-        // Flag so backend knows this was a voice interview ending
         endedBy: "voice",
       });
 
       toast.success("Report ready!", { id: "report-toast" });
     } catch (err) {
-      // Even if save fails — still show report with whatever backend has
       toast.info("Redirecting to report…", { id: "report-toast" });
       console.error("Failed to save voice transcript:", err);
     } finally {
@@ -122,7 +116,6 @@ export default function VoiceInterviewRoom() {
     }
   };
 
- 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#080808] flex items-center justify-center">
@@ -148,7 +141,6 @@ export default function VoiceInterviewRoom() {
       {/* Header */}
       <header className="relative z-20 flex-shrink-0 border-b border-white/[0.06] backdrop-blur-xl bg-black/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-
           <div className="flex items-center gap-3">
             <button
               onClick={() => (isActive || isConnecting) ? setEndModal(true) : navigate("/dashboard")}
@@ -195,21 +187,18 @@ export default function VoiceInterviewRoom() {
 
       {/* Body */}
       <div className="relative z-10 flex-1 flex overflow-hidden max-w-7xl mx-auto w-full">
-
-        {/* LEFT — Transcript */}
+        {/* LEFT — Transcript with real-time streaming */}
         <div className="flex-1 flex flex-col overflow-hidden border-r border-white/[0.05]">
           <VoiceTranscript transcript={transcript} status={status} />
         </div>
 
         {/* RIGHT — Orb + controls */}
         <div className="w-80 xl:w-96 flex-shrink-0 flex flex-col items-center justify-between py-8 px-6">
-
           <div className="flex-1 flex items-center justify-center">
             <VoiceOrb status={status} isSpeaking={isSpeaking} isMuted={isMuted} />
           </div>
 
           <div className="w-full space-y-3">
-
             {/* Not started */}
             {status === "idle" && !saving && (
               <button
@@ -259,7 +248,7 @@ export default function VoiceInterviewRoom() {
             {/* Hint */}
             {isActive && (
               <p className="text-[11px] text-white/20 text-center leading-relaxed">
-                Speak naturally — AI responds in real time. You can interrupt at any time.
+                🎙️ Speak naturally — your words appear in real-time within the message bubble
               </p>
             )}
 
@@ -274,7 +263,7 @@ export default function VoiceInterviewRoom() {
         </div>
       </div>
 
-      {/*  End call modal */}
+      {/* End call modal */}
       {endModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEndModal(false)} />
@@ -286,7 +275,6 @@ export default function VoiceInterviewRoom() {
             <p className="text-sm text-white/40 mb-2 leading-relaxed">
               The call will end and your report will be generated from the conversation so far.
             </p>
-            {/* FIX: clear message that partial interviews get a report too */}
             <p className="text-xs text-emerald-400/70 mb-6 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
               ✓ You'll get a full report even if you didn't finish all questions.
             </p>

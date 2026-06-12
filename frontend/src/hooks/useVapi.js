@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import VapiSDK from "@vapi-ai/web";
 const Vapi = VapiSDK?.default ?? VapiSDK;
 
-// Personality configs 
+// Personality configs
 const PERSONALITY_PROMPTS = {
   friendly: {
     label: "Friendly",
@@ -102,8 +102,15 @@ Your personality:
 };
 
 // Build system prompt
-function buildSystemPrompt({ role, experience, difficulty, maxRounds, personality = "friendly" }) {
-  const config = PERSONALITY_PROMPTS[personality] ?? PERSONALITY_PROMPTS.friendly;
+function buildSystemPrompt({
+  role,
+  experience,
+  difficulty,
+  maxRounds,
+  personality = "friendly",
+}) {
+  const config =
+    PERSONALITY_PROMPTS[personality] ?? PERSONALITY_PROMPTS.friendly;
 
   return `You are a professional technical interviewer conducting a real job interview for a ${role} position.
 
@@ -124,22 +131,31 @@ ${config.prompt}
 Start immediately with your greeting and first question. Keep the intro to 1 sentence.`;
 }
 
-// Hook 
+// Hook
 export function useVapi() {
   const vapiRef = useRef(null);
+  const messageIdCounter = useRef(0);
 
-  const [status,     setStatus]     = useState("idle");
+  const [status, setStatus] = useState("idle");
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isMuted,    setIsMuted]    = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const [transcript, setTranscript] = useState([]);
-  const [error,      setError]      = useState(null);
+  const [error, setError] = useState(null);
 
-  // Init VAPI once 
+  // Generate unique message IDs
+  const generateMessageId = () => {
+    messageIdCounter.current += 1;
+    return `msg-${Date.now()}-${messageIdCounter.current}`;
+  };
+
+  // Init VAPI once
   useEffect(() => {
     const key = import.meta.env.VITE_VAPI_PUBLIC_KEY;
 
     if (!key) {
-      setError("VAPI public key not found. Add VITE_VAPI_PUBLIC_KEY to your .env file.");
+      setError(
+        "VAPI public key not found. Add VITE_VAPI_PUBLIC_KEY to your .env file.",
+      );
       return;
     }
     if (!Vapi) {
@@ -160,6 +176,7 @@ export function useVapi() {
       setStatus("active");
       setError(null);
       setTranscript([]);
+      messageIdCounter.current = 0;
     });
 
     vapi.on("call-end", () => {
@@ -169,33 +186,92 @@ export function useVapi() {
     });
 
     vapi.on("speech-start", () => setIsSpeaking(true));
-    vapi.on("speech-end",   () => setIsSpeaking(false));
+    vapi.on("speech-end", () => setIsSpeaking(false));
 
     vapi.on("message", (msg) => {
       if (msg.type === "transcript") {
         const { role, transcript: text, transcriptType } = msg;
         if (!text?.trim()) return;
 
-        if (transcriptType === "final") {
-          setTranscript((prev) => {
-            const last = prev[prev.length - 1];
-            if (last && last.role === role && last.partial) {
-              return [...prev.slice(0, -1), { role, text, partial: false, id: last.id }];
-            }
-            if (last && last.role === role && !last.partial) {
-              return [...prev.slice(0, -1), { ...last, text: last.text + " " + text }];
-            }
-            return [...prev, { role, text, partial: false, id: Date.now() }];
-          });
-        }
-
         if (transcriptType === "partial") {
+          // Handle partial/streaming messages
           setTranscript((prev) => {
-            const last = prev[prev.length - 1];
-            if (last && last.role === role && last.partial) {
-              return [...prev.slice(0, -1), { ...last, text }];
+            // Check if we already have a partial message from this role
+            const existingPartialIndex = prev.findIndex(
+              (item) => item.role === role && item.partial === true,
+            );
+
+            if (existingPartialIndex !== -1) {
+              // Update existing partial message
+              const updated = [...prev];
+              updated[existingPartialIndex] = {
+                ...updated[existingPartialIndex],
+                text: text,
+                timestamp: Date.now(),
+              };
+              return updated;
+            } else {
+              // Create new partial message
+              return [
+                ...prev,
+                {
+                  id: generateMessageId(),
+                  role: role,
+                  text: text,
+                  partial: true,
+                  timestamp: Date.now(),
+                },
+              ];
             }
-            return [...prev, { role, text, partial: true, id: Date.now() }];
+          });
+        } else if (transcriptType === "final") {
+          // Handle final/complete messages
+          setTranscript((prev) => {
+            // Check if we have a partial message from this role
+            const existingPartialIndex = prev.findIndex(
+              (item) => item.role === role && item.partial === true,
+            );
+
+            if (existingPartialIndex !== -1) {
+              // Replace partial with final message
+              const updated = [...prev];
+              updated[existingPartialIndex] = {
+                id: generateMessageId(),
+                role: role,
+                text: text,
+                partial: false,
+                timestamp: Date.now(),
+              };
+              return updated;
+            } else {
+              // Check if last message is from same role (to combine)
+              const lastMessage = prev[prev.length - 1];
+              if (
+                lastMessage &&
+                lastMessage.role === role &&
+                !lastMessage.partial
+              ) {
+                // Append to last message
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...lastMessage,
+                  text: lastMessage.text + " " + text,
+                  timestamp: Date.now(),
+                };
+                return updated;
+              }
+              // Create new final message
+              return [
+                ...prev,
+                {
+                  id: generateMessageId(),
+                  role: role,
+                  text: text,
+                  partial: false,
+                  timestamp: Date.now(),
+                },
+              ];
+            }
           });
         }
       }
@@ -207,81 +283,101 @@ export function useVapi() {
       setStatus("idle");
     });
 
-    return () => { vapi.stop(); };
+    return () => {
+      if (vapiRef.current) {
+        vapiRef.current.stop();
+      }
+    };
   }, []);
 
-  //Start call 
-  const startCall = useCallback(({
-    role,
-    experience,
-    difficulty,
-    maxRounds   = 5,
-    personality = "friendly",  
-  }) => {
-    if (!vapiRef.current) { setError("VAPI not initialised."); return; }
+  // Start call
+  const startCall = useCallback(
+    ({
+      role,
+      experience,
+      difficulty,
+      maxRounds = 5,
+      personality = "friendly",
+    }) => {
+      if (!vapiRef.current) {
+        setError("VAPI not initialised.");
+        return;
+      }
 
-    setStatus("connecting");
-    setTranscript([]);
-    setError(null);
+      setStatus("connecting");
+      setTranscript([]);
+      setError(null);
+      messageIdCounter.current = 0;
 
-    const config = PERSONALITY_PROMPTS[personality] ?? PERSONALITY_PROMPTS.friendly;
+      const config =
+        PERSONALITY_PROMPTS[personality] ?? PERSONALITY_PROMPTS.friendly;
 
-    const assistantConfig = {
-      model: {
-        provider:    "openai",
-        model:       "gpt-4o-mini",
-        messages: [
-          {
-            role:    "system",
-            content: buildSystemPrompt({ role, experience, difficulty, maxRounds, personality }),
-          },
+      const assistantConfig = {
+        model: {
+          provider: "openai",
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: buildSystemPrompt({
+                role,
+                experience,
+                difficulty,
+                maxRounds,
+                personality,
+              }),
+            },
+          ],
+          temperature: config.temperature,
+        },
+
+        voice: {
+          provider: "vapi",
+          voiceId: config.voiceId,
+        },
+
+        transcriber: {
+          provider: "deepgram",
+          model: "nova-2",
+          language: "en-US",
+        },
+
+        firstMessage: getFirstMessage(role, personality),
+
+        endCallMessage: "Goodbye!",
+
+        endCallPhrases: [
+          "goodbye",
+          "that concludes",
+          "that's a wrap",
+          "we'll be in touch",
+          "hear back from us",
         ],
-        temperature: config.temperature,   // ← each personality has its own temp
-      },
 
-      voice: {
-        provider: "vapi",
-        voiceId:  config.voiceId,          // ← each personality has its own voice
-      },
+        silenceTimeoutSeconds: 20,
+        maxDurationSeconds: 3600,
+        backgroundSound: "off",
+      };
 
-      transcriber: {
-        provider: "deepgram",
-        model:    "nova-2",
-        language: "en-US",
-      },
+      try {
+        vapiRef.current.start(assistantConfig);
+      } catch (err) {
+        setError(err?.message ?? "Failed to start call.");
+        setStatus("idle");
+      }
+    },
+    [],
+  );
 
-      firstMessage: getFirstMessage(role, personality),
-
-      endCallMessage: "Goodbye!",
-
-      endCallPhrases: [
-        "goodbye",
-        "that concludes",
-        "that's a wrap",
-        "we'll be in touch",
-        "hear back from us",
-      ],
-
-      silenceTimeoutSeconds: 20,
-      maxDurationSeconds:    3600,
-      backgroundSound:       "off",
-    };
-
-    try {
-      vapiRef.current.start(assistantConfig);
-    } catch (err) {
-      setError(err?.message ?? "Failed to start call.");
-      setStatus("idle");
+  // End call
+  const endCall = useCallback(() => {
+    setStatus("ending");
+    if (vapiRef.current) {
+      vapiRef.current.stop();
     }
   }, []);
 
-  // End call 
-  const endCall = useCallback(() => {
-    setStatus("ending");
-    vapiRef.current?.stop();
-  }, []);
-
-  //  Mute 
+  // Mute
   const toggleMute = useCallback(() => {
     if (!vapiRef.current) return;
     const next = !isMuted;
@@ -289,21 +385,30 @@ export function useVapi() {
     setIsMuted(next);
   }, [isMuted]);
 
-  return { status, isSpeaking, isMuted, transcript, error, startCall, endCall, toggleMute };
+  return {
+    status,
+    isSpeaking,
+    isMuted,
+    transcript,
+    error,
+    startCall,
+    endCall,
+    toggleMute,
+  };
 }
 
-// First message per personality 
+// First message per personality
 function getFirstMessage(role, personality) {
   const messages = {
-    friendly:      `Hi there! Welcome — I'm really excited to chat with you today about the ${role} role. Ready to get started?`,
-    aggressive:    `Let's begin. ${role} position. I'll be direct — impress me.`,
-    formal:        `Good day. We will now commence the interview for the ${role} position. Please confirm you are ready to proceed.`,
-    mentor:        `Hello! Great to meet you. Today we'll explore your knowledge for the ${role} role — think of this as a learning conversation. Ready?`,
-    rapid:         `Okay — ${role} interview, rapid fire format. Fast questions, fast answers. Let's go. First question:`,
+    friendly: `Hi there! Welcome — I'm really excited to chat with you today about the ${role} role. Ready to get started?`,
+    aggressive: `Let's begin. ${role} position. I'll be direct — impress me.`,
+    formal: `Good day. We will now commence the interview for the ${role} position. Please confirm you are ready to proceed.`,
+    mentor: `Hello! Great to meet you. Today we'll explore your knowledge for the ${role} role — think of this as a learning conversation. Ready?`,
+    rapid: `Okay — ${role} interview, rapid fire format. Fast questions, fast answers. Let's go. First question:`,
     tough_but_fair: `Hello. We're here for the ${role} interview. I'll be straightforward — I expect thorough answers. Let's begin.`,
   };
   return messages[personality] ?? messages.friendly;
 }
 
-//  Export personality configs for UI use 
+// Export personality configs for UI use
 export { PERSONALITY_PROMPTS };
