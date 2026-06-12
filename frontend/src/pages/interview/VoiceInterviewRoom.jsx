@@ -108,9 +108,9 @@ export default function VoiceInterviewRoom() {
       });
 
       toast.success("Report ready!", { id: "report-toast" });
-    } catch (err) {
+    } catch (e) {
       toast.info("Redirecting to report…", { id: "report-toast" });
-      console.error("Failed to save voice transcript:", err);
+      console.log(e)
     } finally {
       setTimeout(() => navigate(`/interview/${id}/report`), 1000);
     }

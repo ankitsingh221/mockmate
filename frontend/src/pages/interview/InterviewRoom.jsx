@@ -33,7 +33,6 @@ export default function InterviewRoom() {
       try {
         const { data } = await api.get(`/interviews/${id}`);
 
-        //  your backend wraps in { success, data: { interview } } OR returns interview directly
         const interview = data.data?.interview ?? data.interview ?? data.data ?? data;
 
         if (!interview) {

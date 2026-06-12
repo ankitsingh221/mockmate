@@ -104,14 +104,10 @@ export default function CreateInterview() {
       interviewData.personality = form.personality;
     }
 
-    // Log the data being sent for debugging
-    console.log("Sending interview data:", interviewData);
 
     try {
       // 1. Create interview
       const { data: created } = await api.post("/interviews", interviewData);
-      
-      console.log("Server response:", created);
 
       const interviewId = created.interview?._id || created._id;
 
@@ -132,9 +128,6 @@ export default function CreateInterview() {
         navigate(`/interview/${interviewId}/room`);
       }
     } catch (err) {
-      console.error("Create interview error:", err);
-      
-      // Log more details about the error
       if (err.response) {
         console.error("Error response data:", err.response.data);
         console.error("Error response status:", err.response.status);
