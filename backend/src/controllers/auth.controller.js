@@ -83,7 +83,6 @@ export const login = async (req, res) => {
 };
 
 export const logout = async (req, res) => {
-  //\ use same options as set — secure/sameSite must match or cookie won't clear
   res.clearCookie("token", COOKIE_OPTIONS);
 
   return res.json({ success: true, message: "Logged out successfully" });

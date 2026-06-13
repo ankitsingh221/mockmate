@@ -104,7 +104,6 @@ export default function CreateInterview() {
       interviewData.personality = form.personality;
     }
 
-
     try {
       // 1. Create interview
       const { data: created } = await api.post("/interviews", interviewData);
@@ -128,14 +127,6 @@ export default function CreateInterview() {
         navigate(`/interview/${interviewId}/room`);
       }
     } catch (err) {
-      if (err.response) {
-        console.error("Error response data:", err.response.data);
-        console.error("Error response status:", err.response.status);
-        console.error("Error response headers:", err.response.headers);
-      } else if (err.request) {
-        console.error("Error request:", err.request);
-      }
-
       const errorMessage =
         err.response?.data?.message ||
         err.response?.data?.error ||
@@ -196,8 +187,8 @@ export default function CreateInterview() {
                   s.id === step
                     ? "bg-red-600/20 border-red-500/40 text-red-400"
                     : s.id < step
-                    ? "bg-white/[0.06] border-white/[0.1] text-white/50"
-                    : "bg-transparent border-white/[0.05] text-white/20"
+                      ? "bg-white/[0.06] border-white/[0.1] text-white/50"
+                      : "bg-transparent border-white/[0.05] text-white/20"
                 }`}
               >
                 <IconComponent className="w-4 h-4" />
@@ -481,13 +472,24 @@ export default function CreateInterview() {
                   { label: "Role", value: form.jobRole },
                   { label: "Experience", value: form.experienceLevel },
                   { label: "Difficulty", value: form.difficulty },
-                  { label: "Mode", value: form.mode === "text" ? "Text" : "Voice" },
-                  { 
-                    label: "Duration", 
-                    value: getDurationDisplay(form.duration, form.mode) 
+                  {
+                    label: "Mode",
+                    value: form.mode === "text" ? "Text" : "Voice",
+                  },
+                  {
+                    label: "Duration",
+                    value: getDurationDisplay(form.duration, form.mode),
                   },
                   ...(form.mode === "voice" && form.personality
-                    ? [{ label: "Personality", value: PERSONALITY_OPTIONS.find(p => p.value === form.personality)?.label || form.personality }]
+                    ? [
+                        {
+                          label: "Personality",
+                          value:
+                            PERSONALITY_OPTIONS.find(
+                              (p) => p.value === form.personality,
+                            )?.label || form.personality,
+                        },
+                      ]
                     : []),
                 ].map(({ label, value }) => (
                   <div
@@ -554,7 +556,7 @@ export default function CreateInterview() {
             {form.personality &&
               (() => {
                 const selected = PERSONALITY_OPTIONS.find(
-                  (o) => o.value === form.personality
+                  (o) => o.value === form.personality,
                 );
                 const previews = {
                   friendly: `"That's a great answer! I really liked how you explained that. Let's move on to the next question."`,

@@ -72,7 +72,7 @@ export default function InterviewRoom() {
 
         loadQuestion({
           question: interview.currentQuestion,
-          roundNumber: (interview.currentRound ?? 0) + 1,
+          roundNumber: interview.currentRound + 1,
           totalRounds: interview.maxRounds ?? 5,
           timeLimit: DEFAULT_Q_SECONDS,
         });
@@ -167,7 +167,7 @@ export default function InterviewRoom() {
             } else if (result.nextQuestion) {
               advanceToNext({
                 question: result.nextQuestion,
-                roundNumber: result.currentRound ?? state.roundNumber,
+                roundNumber: result.currentRound + 1,
                 totalRounds: result.maxRounds ?? state.totalRounds,
                 timeLimit: DEFAULT_Q_SECONDS,
               });

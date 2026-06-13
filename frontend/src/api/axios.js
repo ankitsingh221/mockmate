@@ -14,7 +14,6 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Clear client-side user state and redirect to login
       useAuthStore.getState().logout();
       window.location.href = "/login";
     }

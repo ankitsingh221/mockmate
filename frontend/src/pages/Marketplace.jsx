@@ -56,7 +56,7 @@ export default function Marketplace() {
   const [difficulty, setDifficulty] = useState("all");
   const [experience, setExperience] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
-  
+
   // Mode selection modal state
   const [showModeModal, setShowModeModal] = useState(false);
   const [selectedInterview, setSelectedInterview] = useState(null);
@@ -66,15 +66,22 @@ export default function Marketplace() {
   useEffect(() => {
     const fetchInterviews = async () => {
       try {
-        const { data } = await api.get("/interviews/public/list");
-        const interviewList = Array.isArray(data)
-          ? data
-          : (data.interviews ?? []);
+        const response = await api.get("/interviews/public/list");
+
+        // Extract interviews array from response
+        let interviewList = [];
+        if (response.data.interviews) {
+          interviewList = response.data.interviews;
+        } else if (Array.isArray(response.data)) {
+          interviewList = response.data;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          interviewList = response.data.data;
+        }
+
         setInterviews(interviewList);
 
-        if (!hasShownToast.current) {
+        if (!hasShownToast.current && interviewList.length > 0) {
           hasShownToast.current = true;
-
           toast.success(`📚 ${interviewList.length} interviews loaded`, {
             description:
               "Find the perfect interview practice for your next role",
@@ -105,17 +112,21 @@ export default function Marketplace() {
   // Handle mode selection and navigation
   const handleModeSelect = async (mode) => {
     if (!selectedInterview) return;
-    
+
     setShowModeModal(false);
-    
-    const roleName = selectedInterview.role || selectedInterview.jobRole || selectedInterview.title || "Interview";
-    
+
+    const roleName =
+      selectedInterview.role ||
+      selectedInterview.jobRole ||
+      selectedInterview.title ||
+      "Interview";
+
     setTaking(selectedInterview._id);
 
     try {
       // Clone the interview
       const { data: cloned } = await api.post(
-        `/interviews/${selectedInterview._id}/take`
+        `/interviews/${selectedInterview._id}/take`,
       );
       const newId = cloned._id ?? cloned.interview?._id;
 
@@ -128,7 +139,7 @@ export default function Marketplace() {
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       toast.success(`"${roleName}" interview ready! 🚀`);
-      
+
       // Navigate based on selected mode
       if (mode === "voice") {
         navigate(`/interview/${newId}/voice`);
@@ -136,7 +147,6 @@ export default function Marketplace() {
         navigate(`/interview/${newId}/room`);
       }
     } catch (err) {
-      console.error(err);
       toast.error(err.response?.data?.message || "Failed to start interview");
       setTaking(null);
     }
@@ -419,13 +429,14 @@ export default function Marketplace() {
 
 // Mode Selection Modal Component
 function ModeSelectionModal({ interview, onClose, onSelectMode }) {
-  const displayRole = interview?.role || interview?.jobRole || interview?.title || "Interview";
-  
+  const displayRole =
+    interview?.role || interview?.jobRole || interview?.title || "Interview";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div 
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
-        onClick={onClose} 
+      <div
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        onClick={onClose}
       />
       <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/[0.09] bg-[#111]/95 backdrop-blur-xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
         {/* Header */}
@@ -437,7 +448,8 @@ function ModeSelectionModal({ interview, onClose, onSelectMode }) {
             Choose interview mode
           </h2>
           <p className="text-sm text-white/40">
-            {displayRole} • {interview?.difficulty || "Medium"} • {interview?.duration || "15"} min
+            {displayRole} • {interview?.difficulty || "Medium"} •{" "}
+            {interview?.duration || "15"} min
           </p>
         </div>
 
@@ -452,8 +464,12 @@ function ModeSelectionModal({ interview, onClose, onSelectMode }) {
               <Keyboard className="w-5 h-5 text-white/60 group-hover:text-red-400 transition-colors" />
             </div>
             <div className="flex-1 text-left">
-              <p className="font-semibold text-sm text-white/90 group-hover:text-white">Text Mode</p>
-              <p className="text-xs text-white/40 mt-0.5">Type your answers to AI questions</p>
+              <p className="font-semibold text-sm text-white/90 group-hover:text-white">
+                Text Mode
+              </p>
+              <p className="text-xs text-white/40 mt-0.5">
+                Type your answers to AI questions
+              </p>
             </div>
             <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-red-400 transition-colors" />
           </button>
@@ -467,8 +483,12 @@ function ModeSelectionModal({ interview, onClose, onSelectMode }) {
               <Mic className="w-5 h-5 text-white/60 group-hover:text-red-400 transition-colors" />
             </div>
             <div className="flex-1 text-left">
-              <p className="font-semibold text-sm text-white/90 group-hover:text-white">Voice Mode</p>
-              <p className="text-xs text-white/40 mt-0.5">Speak naturally with AI interviewer</p>
+              <p className="font-semibold text-sm text-white/90 group-hover:text-white">
+                Voice Mode
+              </p>
+              <p className="text-xs text-white/40 mt-0.5">
+                Speak naturally with AI interviewer
+              </p>
             </div>
             <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-red-400 transition-colors" />
           </button>
@@ -477,8 +497,8 @@ function ModeSelectionModal({ interview, onClose, onSelectMode }) {
         {/* Info note */}
         <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.06]">
           <p className="text-xs text-white/30 text-center leading-relaxed">
-            💡 Voice mode requires microphone access. Text mode works in any browser.
-            You can switch modes during the interview setup.
+            💡 Voice mode requires microphone access. Text mode works in any
+            browser. You can switch modes during the interview setup.
           </p>
         </div>
 
@@ -493,34 +513,55 @@ function ModeSelectionModal({ interview, onClose, onSelectMode }) {
     </div>
   );
 }
+// ── Replace the MarketplaceCard function in Marketplace.jsx ──────────────────
 
 function MarketplaceCard({ interview, taking, onTake }) {
   const diff = DIFF_STYLE[interview.difficulty?.toLowerCase()] ?? null;
 
   const displayRole =
     interview.role || interview.jobRole || interview.title || "Untitled Role";
+
   const displayExperience =
     interview.experienceLevel || interview.experience || interview.level || "";
+
+  // FIX: full priority chain for creator name
+  // checks every possible field the backend might send
+  const creatorName = (() => {
+    const cb = interview.createdBy;
+    if (!cb) return "Community";
+
+    // if createdBy is a string (some backends send just the name)
+    if (typeof cb === "string" && cb.trim()) return cb.trim();
+
+    // if createdBy is an object — check all possible name fields
+    if (cb.name?.trim())     return cb.name.trim();
+    if (cb.username?.trim()) return cb.username.trim();
+
+    // email prefix as last resort — "john" from "john@gmail.com"
+    if (cb.email?.trim())    return cb.email.split("@")[0];
+
+    return "Community";
+  })();
 
   return (
     <div className="group relative rounded-2xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-md overflow-hidden hover:border-red-500/30 hover:bg-white/[0.05] transition-all duration-300">
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
       <div className="p-5 space-y-3.5">
+        {/* Role + difficulty */}
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-semibold text-base text-white/90 leading-snug line-clamp-2 flex-1">
             {displayRole}
           </h3>
           {diff && (
-            <span
-              className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium capitalize flex-shrink-0 ${diff.bg} ${diff.text}`}
-            >
+            <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium capitalize flex-shrink-0 ${diff.bg} ${diff.text}`}>
               {diff.icon}
               {interview.difficulty}
             </span>
           )}
         </div>
 
+        {/* Meta pills */}
         <div className="flex flex-wrap gap-1.5">
           {displayExperience && (
             <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-white/[0.05] border border-white/[0.07] text-white/45 capitalize">
@@ -534,65 +575,46 @@ function MarketplaceCard({ interview, taking, onTake }) {
               {formatDuration(interview.duration)}
             </span>
           )}
-          {interview.questions?.length > 0 && (
+          {interview.maxRounds > 0 && (
             <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-white/[0.05] border border-white/[0.07] text-white/45">
               <Award className="w-2.5 h-2.5" />
-              {interview.questions.length} Q
+              {interview.maxRounds} Q
             </span>
           )}
         </div>
 
         <div className="h-px bg-white/[0.05]" />
 
+        {/* Creator + date */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[11px] text-white/30">
             <div className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center">
               <User className="w-2.5 h-2.5" />
             </div>
-            <span className="truncate max-w-[100px]">
-              {interview.createdBy?.name ??
-                interview.createdBy?.username ??
-                "Community"}
-            </span>
+            {/* FIX: removed truncate max-w so short names show fully */}
+            <span className="max-w-[120px] truncate">{creatorName}</span>
           </div>
           <span className="text-[11px] text-white/20">
             {formatDate(interview.createdAt)}
           </span>
         </div>
 
+        {/* CTA */}
         <button
           onClick={onTake}
           disabled={taking}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-rose-900/80 hover:bg-rose-800/80 text-white text-sm font-semibold transition-all shadow-lg shadow-red-900/30 disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98]"
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold transition-all shadow-lg shadow-red-900/30 disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98]"
         >
           {taking ? (
             <>
-              <svg
-                className="w-3.5 h-3.5 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                />
+              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
               </svg>
               Starting…
             </>
           ) : (
-            <>
-              <Play className="w-3.5 h-3.5" />
-              Take this interview
-            </>
+            <><Play className="w-3.5 h-3.5" /> Take this interview</>
           )}
         </button>
       </div>

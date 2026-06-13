@@ -2,13 +2,13 @@ import { useCallback, useReducer, useEffect } from "react";
 import api from "../api/axios";
 
 const init = {
-  interview:   null,
-  question:    null,
-  roundNumber: 0,
+  interview: null,
+  question: null,
+  roundNumber: 1,
   totalRounds: 0,
-  evaluation:  null,
-  phase:       "loading",   
-  error:       null,
+  evaluation: null,
+  phase: "loading",
+  error: null,
   isSubmitting: false, // Added to prevent double submission
 };
 
@@ -17,30 +17,41 @@ function reducer(state, action) {
     case "SET_LOADING":
       return { ...state, phase: "loading", error: null };
     case "SET_INTERVIEW":
-      return { 
-        ...state, 
+      return {
+        ...state,
         interview: action.payload,
-        totalRounds: action.payload?.maxRounds || action.payload?.totalRounds || 0,
+        totalRounds:
+          action.payload?.maxRounds || action.payload?.totalRounds || 0,
       };
     case "SET_QUESTION":
       return {
         ...state,
-        question:    action.payload.question ?? action.payload,
-        roundNumber: action.payload.roundNumber ?? state.roundNumber + 1,
+        question: action.payload.question ?? action.payload,
+        roundNumber: action.payload.roundNumber,
         totalRounds: action.payload.totalRounds ?? state.totalRounds,
-        evaluation:  null,
-        phase:       "question",
-        error:       null,
+        evaluation: null,
+        phase: "question",
+        error: null,
         isSubmitting: false,
       };
     case "EVALUATING":
       return { ...state, phase: "evaluating", isSubmitting: true };
     case "SET_EVALUATION":
-      return { ...state, evaluation: action.payload, phase: "feedback", isSubmitting: false };
+      return {
+        ...state,
+        evaluation: action.payload,
+        phase: "feedback",
+        isSubmitting: false,
+      };
     case "DONE":
       return { ...state, phase: "done", isSubmitting: false };
     case "ERROR":
-      return { ...state, phase: "error", error: action.payload, isSubmitting: false };
+      return {
+        ...state,
+        phase: "error",
+        error: action.payload,
+        isSubmitting: false,
+      };
     case "RESET_ERROR":
       return { ...state, error: null };
     default:
@@ -59,31 +70,31 @@ export function useInterview(interviewId) {
     }
 
     dispatch({ type: "SET_LOADING" });
-    
+
     try {
       const { data } = await api.get(`/interviews/${interviewId}`);
       const interview = data.interview ?? data.data ?? data;
-      
+
       if (!interview) {
         throw new Error("Interview not found");
       }
-      
+
       dispatch({ type: "SET_INTERVIEW", payload: interview });
-      
+
       // If interview has a current question, load it
       if (interview.currentQuestion) {
-        dispatch({ 
-          type: "SET_QUESTION", 
+        dispatch({
+          type: "SET_QUESTION",
           payload: {
             question: interview.currentQuestion,
-            roundNumber: interview.currentRound || 1,
-            totalRounds: interview.maxRounds || interview.totalRounds || 5,
-          }
+            roundNumber: (interview.currentRound ?? 0) + 1,
+            totalRounds: interview.maxRounds ?? interview.totalRounds ?? 5,
+          },
         });
       } else if (interview.status === "completed") {
         dispatch({ type: "DONE" });
       }
-      
+
       return interview;
     } catch (err) {
       const msg = err.response?.data?.message ?? "Failed to load interview.";
@@ -105,76 +116,85 @@ export function useInterview(interviewId) {
       dispatch({ type: "ERROR", payload: "No question data provided" });
       return;
     }
-    
+
     dispatch({ type: "SET_QUESTION", payload: questionData });
   }, []);
 
   // Submit an answer
-  const submitAnswer = useCallback(async (answerText) => {
-    // Prevent double submission
-    if (state.isSubmitting || state.phase === "evaluating") {
-      console.warn("Already submitting an answer");
-      return null;
-    }
-    
-    if (!answerText || answerText.trim().length === 0) {
-      dispatch({ type: "ERROR", payload: "Answer cannot be empty" });
-      return null;
-    }
-    
-    dispatch({ type: "EVALUATING" });
-    
-    try {
-      const { data } = await api.post(`/interviews/${interviewId}/answer`, {
-        answer: answerText.trim(),
-      });
-
-      const payload = data.data || data;
-      
-      if (!payload) {
-        throw new Error("Empty response from server");
+  const submitAnswer = useCallback(
+    async (answerText) => {
+      // Prevent double submission
+      if (state.isSubmitting || state.phase === "evaluating") {
+        return null;
       }
 
-      const evaluation = payload.evaluation;
-      
-      if (!evaluation) {
-        throw new Error("No evaluation received from server");
+      if (!answerText || answerText.trim().length === 0) {
+        dispatch({ type: "ERROR", payload: "Answer cannot be empty" });
+        return null;
       }
 
-      dispatch({ type: "SET_EVALUATION", payload: evaluation });
+      dispatch({ type: "EVALUATING" });
 
-      return {
-        evaluation,
-        nextQuestion: payload.nextQuestion ?? null,
-        isCompleted:  payload.isCompleted ?? false,
-        currentRound: payload.currentRound ?? state.roundNumber,
-        maxRounds:    payload.maxRounds ?? state.totalRounds,
-        overallScore: payload.overallScore ?? null,
-      };
-    } catch (err) {
-      const msg = err.response?.data?.message ?? err.message ?? "Failed to submit answer.";
-      console.error("Submit answer error:", err);
-      dispatch({ type: "ERROR", payload: msg });
-      throw err;
-    }
-  }, [interviewId, state.roundNumber, state.totalRounds, state.isSubmitting, state.phase]);
+      try {
+        const { data } = await api.post(`/interviews/${interviewId}/answer`, {
+          answer: answerText.trim(),
+        });
+
+        const payload = data.data || data;
+
+        if (!payload) {
+          throw new Error("Empty response from server");
+        }
+
+        const evaluation = payload.evaluation;
+
+        if (!evaluation) {
+          throw new Error("No evaluation received from server");
+        }
+
+        dispatch({ type: "SET_EVALUATION", payload: evaluation });
+
+        return {
+          evaluation,
+          nextQuestion: payload.nextQuestion ?? null,
+          isCompleted: payload.isCompleted ?? false,
+          currentRound: payload.currentRound ?? state.roundNumber,
+          maxRounds: payload.maxRounds ?? state.totalRounds,
+          overallScore: payload.overallScore ?? null,
+        };
+      } catch (err) {
+        const msg =
+          err.response?.data?.message ??
+          err.message ??
+          "Failed to submit answer.";
+        dispatch({ type: "ERROR", payload: msg });
+        throw err;
+      }
+    },
+    [
+      interviewId,
+      state.roundNumber,
+      state.totalRounds,
+      state.isSubmitting,
+      state.phase,
+    ],
+  );
 
   // End interview early
   const endInterview = useCallback(async () => {
     if (state.isSubmitting) {
-      console.warn("Please wait for current answer to be evaluated");
-      return null;
+      // wait for current answer to submmitting
+      return null;  
     }
-    
+
     try {
       const { data } = await api.post(`/interviews/${interviewId}/end`);
       dispatch({ type: "DONE" });
-      
+
       // Return the report data if available
       return data.data ?? data ?? null;
     } catch (err) {
       const msg = err.response?.data?.message ?? "Failed to end interview.";
-      console.error("End interview error:", err);
       dispatch({ type: "ERROR", payload: msg });
       throw err;
     }
@@ -183,10 +203,9 @@ export function useInterview(interviewId) {
   // Advance to next question
   const advanceToNext = useCallback((nextQuestion) => {
     if (!nextQuestion) {
-      console.warn("No next question provided");
       return;
     }
-    
+
     dispatch({ type: "SET_QUESTION", payload: nextQuestion });
   }, []);
 
@@ -200,14 +219,14 @@ export function useInterview(interviewId) {
     dispatch({ type: "RESET_ERROR" });
   }, []);
 
-  return { 
-    state, 
+  return {
+    state,
     fetchInterview, // Expose this for manual refresh
-    loadQuestion, 
-    submitAnswer, 
-    endInterview, 
-    advanceToNext, 
+    loadQuestion,
+    submitAnswer,
+    endInterview,
+    advanceToNext,
     markDone,
-    resetError, 
+    resetError,
   };
 }

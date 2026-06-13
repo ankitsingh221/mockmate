@@ -131,7 +131,7 @@ export default function Home() {
         </h1>
 
         <p className="mt-6 text-base md:text-lg text-zinc-400 max-w-xl leading-relaxed">
-          MockAI puts you in front of an AI interviewer that asks the right questions for your role,
+          Mockmate puts you in front of an AI interviewer that asks the right questions for your role,
           scores every answer, and tells you exactly what to improve.
         </p>
 
@@ -349,10 +349,10 @@ export default function Home() {
             <div className="w-6 h-6 rounded-md bg-red-600 flex items-center justify-center">
               <Mic className="w-3 h-3 text-white" />
             </div>
-            <span className="text-sm font-medium text-zinc-500">MockAI</span>
+            <span className="text-sm font-medium text-zinc-500">Mockmate</span>
           </div>
           <p className="text-xs text-zinc-700">
-            © {new Date().getFullYear()} MockAI. Built to make you interview-ready.
+            © {new Date().getFullYear()} Mockmate. Built to make you interview-ready.
           </p>
           <div className="flex items-center gap-5">
             <Link to="/login" className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">Sign in</Link>

@@ -149,8 +149,6 @@ export const startInterview = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("startInterview error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to start interview",
@@ -249,8 +247,6 @@ export const submitAnswer = async (req, res) => {
         interview.suggestions = report.suggestions ?? [];
         interview.summary = report.summary ?? "";
       } catch (reportErr) {
-        // Don't block completion if report generation fails
-        console.error("Final report generation failed:", reportErr.message);
         interview.overallScore = 0;
         interview.summary = "Report could not be generated. Please try again.";
       }
@@ -283,7 +279,6 @@ export const submitAnswer = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("submitAnswer error:", error.message);
     return res
       .status(500)
       .json({ success: false, message: "Failed to submit answer" });
@@ -425,7 +420,6 @@ export const endInterview = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("END INTERVIEW ERROR:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -492,29 +486,23 @@ export const makeInterviewPublic = async (req, res) => {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid interview ID",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid interview ID" });
     }
 
     const interview = await Interview.findById(id);
 
     if (!interview) {
-      return res.status(404).json({
-        success: false,
-        message: "Interview not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Interview not found" });
     }
 
     if (!checkOwnership(interview, req.user.userId)) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied",
-      });
+      return res.status(403).json({ success: false, message: "Access denied" });
     }
 
-    // Only allow completed interviews to be published
     if (interview.status !== "completed") {
       return res.status(400).json({
         success: false,
@@ -524,6 +512,9 @@ export const makeInterviewPublic = async (req, res) => {
 
     interview.isPublic = true;
     interview.type = "template";
+    if (!interview.userId) {
+      interview.userId = req.user.userId;
+    }
 
     await interview.save();
 
@@ -532,10 +523,9 @@ export const makeInterviewPublic = async (req, res) => {
       message: "Interview published to marketplace",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to publish interview",
-    });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to publish interview" });
   }
 };
 
@@ -546,31 +536,32 @@ export const getPublicInterviews = async (req, res) => {
       type: "template",
     })
       .sort({ createdAt: -1 })
-      .select("role experience difficulty duration createdAt userId")
-      .populate("userId", "name email username");
+      .populate("userId", "name email")
+      .lean();
 
-    // Transform the response to match frontend expectations
-    const transformedInterviews = interviews.map((interview) => ({
-      ...interview.toObject(),
-      createdBy: {
-        name: interview.userId?.name,
-        username: interview.userId?.username,
-        email: interview.userId?.email,
-      },
-      // Ensure consistent field names
-      role: interview.role,
-      experienceLevel: interview.experience,
-    }));
+    if (!interviews.length) {
+      return res.status(200).json({ success: true, interviews: [] });
+    }
 
-    return res.status(200).json({
-      success: true,
-      interviews: transformedInterviews,
+    const result = interviews.map((iv) => {
+      const user = iv.userId;
+      const displayName =
+        user?.name?.trim() || user?.email?.split("@")[0] || "Community";
+
+      return {
+        ...iv,
+        userId: user?._id ?? iv.userId,
+        createdBy: { name: displayName },
+        experienceLevel: iv.experience,
+      };
     });
+
+    return res.status(200).json({ success: true, interviews: result });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch public interviews",
-    });
+    console.error("getPublicInterviews error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch public interviews" });
   }
 };
 
@@ -686,7 +677,6 @@ export const deleteInterview = async (req, res) => {
       deletedFromDB,
     });
   } catch (error) {
-    console.error("Delete interview error:", error);
     res.status(500).json({
       success: false,
       message: error.message || "Server error while deleting interview",

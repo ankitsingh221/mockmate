@@ -8,6 +8,7 @@ import { useAuthStore } from "./store/authStore";
 // Public pages
 import Home from "./pages/Home";
 import SignIn from "./pages/SignIn";
+import SignUp from "./pages/Signup";
 
 // Protected pages
 import Dashboard from "./pages/Dashboard";
@@ -16,7 +17,6 @@ import CreateInterview from "./pages/interview/CreateInterview";
 import InterviewRoom from "./pages/interview/InterviewRoom";
 import InterviewReport from "./pages/interview/InterviewReport";
 import VoiceInterviewRoom from "./pages/interview/VoiceInterviewRoom"; // ← FIX 1: wrong path alias
-import SignUp from "./pages/Signup";
 
 function AppLayout({ children }) {
   return (
@@ -27,9 +27,13 @@ function AppLayout({ children }) {
   );
 }
 
+function AuthRoute({ children }) {
+  const { isAuthenticated, isHydrated } = useAuthStore();
+  if (!isHydrated) return null;
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  return children;
+}
 export default function App() {
-  const { isAuthenticated } = useAuthStore();
-
   return (
     <BrowserRouter>
       <Toaster
@@ -67,13 +71,17 @@ export default function App() {
         <Route
           path="/signup"
           element={
-            isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignUp />
+            <AuthRoute>
+              <SignUp />
+            </AuthRoute>
           }
         />
         <Route
           path="/login"
           element={
-            isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignIn />
+            <AuthRoute>
+              <SignIn />
+            </AuthRoute>
           }
         />
 

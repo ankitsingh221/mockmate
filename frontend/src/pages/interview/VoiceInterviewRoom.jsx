@@ -105,8 +105,7 @@ export default function VoiceInterviewRoom() {
         endedBy: "voice",
       });
       toast.success("Report ready!", { id: "report-toast" });
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
       toast.info("Redirecting to report…", { id: "report-toast" });
     } finally {
       setTimeout(() => navigate(`/interview/${id}/report`), 1000);

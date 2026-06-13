@@ -278,7 +278,6 @@ export function useVapi() {
     });
 
     vapi.on("error", (err) => {
-      console.error("VAPI error:", err);
       setError(err?.error?.message?.msg ?? err?.message ?? "Voice call error.");
       setStatus("idle");
     });

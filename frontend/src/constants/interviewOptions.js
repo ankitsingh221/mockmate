@@ -93,7 +93,7 @@ export const PERSONALITY_OPTIONS = [
     activeClass: "border-emerald-500/50 bg-emerald-500/10 text-emerald-400",
   },
   {
-    value: "Tough but Fair",
+    value: "tough but fair",
     label: "Tough but Fair",
     sub: "High standards, respectful, honest feedback",
     icon: Scale,
@@ -117,7 +117,7 @@ export const PERSONALITY_OPTIONS = [
     activeClass: "border-amber-500/50 bg-amber-500/10 text-amber-400",
   },
   {
-    value: "mentor",
+    value: "mentor", 
     label: "Mentor",
     sub: "Teaches while evaluating, adds insights",
     icon: GraduationCap,
@@ -125,7 +125,7 @@ export const PERSONALITY_OPTIONS = [
     activeClass: "border-purple-500/50 bg-purple-500/10 text-purple-400",
   },
   {
-    value: "rapid",
+    value: "rapid fire", 
     label: "Rapid Fire",
     sub: "Fast pace, short answers, covers max topics",
     icon: Zap,
