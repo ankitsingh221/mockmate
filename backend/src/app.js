@@ -25,7 +25,7 @@ app.use(morgan("dev")); // request logs
 app.use(
   cors({
     
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: process.env.CLIENT_URL,
     credentials: true, // Required for cookies to be sent cross-origin
   })
 );
