@@ -531,10 +531,7 @@ export const makeInterviewPublic = async (req, res) => {
 
 export const getPublicInterviews = async (req, res) => {
   try {
-    const interviews = await Interview.find({
-      isPublic: true,
-      type: "template",
-    })
+    const interviews = await Interview.find({ isPublic: true, type: "template" })
       .sort({ createdAt: -1 })
       .populate("userId", "name email")
       .lean();
@@ -545,13 +542,18 @@ export const getPublicInterviews = async (req, res) => {
 
     const result = interviews.map((iv) => {
       const user = iv.userId;
-      const displayName =
-        user?.name?.trim() || user?.email?.split("@")[0] || "Community";
+
+      // user is populated object OR still an ObjectId if populate failed
+      const isPopulated = user && typeof user === "object" && user.name !== undefined;
+
+      const displayName = isPopulated
+        ? (user.name?.trim() || user.email?.split("@")[0] || "Community")
+        : "Community";
 
       return {
         ...iv,
-        userId: user?._id ?? iv.userId,
-        createdBy: { name: displayName },
+        userId:          isPopulated ? user._id : iv.userId,
+        createdBy:       { name: displayName },
         experienceLevel: iv.experience,
       };
     });
@@ -559,9 +561,10 @@ export const getPublicInterviews = async (req, res) => {
     return res.status(200).json({ success: true, interviews: result });
   } catch (error) {
     console.error("getPublicInterviews error:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch public interviews" });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch public interviews",
+    });
   }
 };
 
