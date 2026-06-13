@@ -1,5 +1,5 @@
 import { getAIJsonResponse } from "../lib/grok.js";
-import { firstQuestionPrompt } from "../prompts/firstQuestion.prompt.js";
+import { firstQuestionPrompt } from "../prompts/FirstQuestion.prompt.js";
 
 export const generateFirstQuestionAI = async (data) => {
   try {
@@ -9,7 +9,12 @@ export const generateFirstQuestionAI = async (data) => {
       throw new Error("role, experience, and difficulty are required");
     }
 
-    const prompt = firstQuestionPrompt({ role, experience, difficulty, maxRounds });
+    const prompt = firstQuestionPrompt({
+      role,
+      experience,
+      difficulty,
+      maxRounds,
+    });
 
     const response = await getAIJsonResponse(prompt);
 

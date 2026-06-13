@@ -95,7 +95,7 @@ export default function Home() {
           ) : (
             <>
               <Link
-                to="/signin"
+                to="/login"
                 className="text-sm font-medium text-zinc-400 hover:text-white transition-colors px-3 py-2"
               >
                 Sign in
@@ -355,7 +355,7 @@ export default function Home() {
             © {new Date().getFullYear()} MockAI. Built to make you interview-ready.
           </p>
           <div className="flex items-center gap-5">
-            <Link to="/signin" className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">Sign in</Link>
+            <Link to="/login" className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">Sign in</Link>
             <Link to="/signup" className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">Sign up</Link>
           </div>
         </div>

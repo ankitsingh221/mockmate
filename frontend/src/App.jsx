@@ -7,7 +7,6 @@ import { useAuthStore } from "./store/authStore";
 
 // Public pages
 import Home from "./pages/Home";
-import SignUp from "./pages/SignUp";
 import SignIn from "./pages/SignIn";
 
 // Protected pages
@@ -17,6 +16,7 @@ import CreateInterview from "./pages/interview/CreateInterview";
 import InterviewRoom from "./pages/interview/InterviewRoom";
 import InterviewReport from "./pages/interview/InterviewReport";
 import VoiceInterviewRoom from "./pages/interview/VoiceInterviewRoom"; // ← FIX 1: wrong path alias
+import SignUp from "./pages/Signup";
 
 function AppLayout({ children }) {
   return (
@@ -71,7 +71,7 @@ export default function App() {
           }
         />
         <Route
-          path="/signin"
+          path="/login"
           element={
             isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignIn />
           }
